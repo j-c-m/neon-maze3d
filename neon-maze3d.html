@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.37 (UUID: y7z6a5b4-c3d2-9e8f-g7h6-i5j4k3l2m1)</title>
+    <title>3D Neon Maze - v3.38 (UUID: a8b7c6d5-e4f3-2g1h-i0j9-k8l7m6n5p4)</title>
     <style>
         body {
             margin: 0;
@@ -193,6 +193,9 @@
          * Version 3.37 (UUID: y7z6a5b4-c3d2-9e8f-g7h6-i5j4k3l2m1)
          * - Fixed wall clipping at joins: expanded raycast coverage with additional angles, added preemptive position sweep, increased safeDistance to 0.25
          *
+         * Version 3.38 (UUID: a8b7c6d5-e4f3-2g1h-i0j9-k8l7m6n5p4)
+         * - Increased pathSpeed from 0.4 to 0.8 to match maxSpeed for faster auto-pathfinding
+         *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 3.37 -> 3.38) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
@@ -202,7 +205,7 @@
          *
          * Useful Constants and Tips:
          * - maxSpeed (0.8): Controls manual movement speed; increase for faster movement, decrease for slower.
-         * - pathSpeed (0.4): Controls auto-pathfinding speed; adjust between 0.1-1.0 for desired pace (current 0.4 is moderate).
+         * - pathSpeed (0.8): Controls auto-pathfinding speed; adjust between 0.1-1.0 for desired pace (current 0.8 matches maxSpeed).
          * - rotationLerpSpeed (0.1): Controls camera rotation speed during pathfinding; 0.05-0.5 range for smooth adjustments.
          * - wallThickness (0.01): Minimum visible thickness; avoid <0.01 to prevent rendering issues.
          * - safeDistance (wallThickness + 0.25): Collision buffer; tweak 0.25 for larger/smaller wall boundaries.
@@ -217,8 +220,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.37:
-        // git commit -m "Version 3.37: Fixed wall clipping at joins with expanded raycast coverage, preemptive position sweep, and increased safeDistance to 0.25 (UUID: y7z6a5b4-c3d2-9e8f-g7h6-i5j4k3l2m1)" neon-maze3d.html
+        // Git Commit Command for Version 3.38:
+        // git commit -m "Version 3.38: Increased pathSpeed from 0.4 to 0.8 to match maxSpeed for faster auto-pathfinding (UUID: a8b7c6d5-e4f3-2g1h-i0j9-k8l7m6n5p4)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -411,7 +414,7 @@
               friction = 0.15,
               wallFriction = 0,
               rotationSpeed = 0.002,
-              pathSpeed = 0.4,
+              pathSpeed = 0.8,  // Changed from 0.4 to 0.8 to match maxSpeed
               rotationLerpSpeed = 0.1;
         let velocity = new THREE.Vector3(0, 0, 0);
         const raycaster = new THREE.Raycaster();
@@ -859,14 +862,14 @@
                     ];
 
                     let finalMove = moveStep.clone();
-                    const safeDistance = wallThickness + 0.25; // Increased from 0.2 to 0.25
+                    const safeDistance = wallThickness + 0.25;
 
                     // Apply sliding based on raycasts
                     for (const dir of checkDirections) {
                         raycaster.set(camera.position, dir);
                         const intersects = raycaster.intersectObjects(wallMeshes);
                         if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + safeDistance) {
-                            const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                            const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
                             const moveDotNormal = finalMove.dot(normal);
                             if (moveDotNormal < 0) {
                                 finalMove.sub(normal.clone().multiplyScalar(moveDotNormal));
@@ -887,7 +890,7 @@
                         raycaster.set(newPosition, dir);
                         const intersects = raycaster.intersectObjects(wallMeshes);
                         if (intersects.length > 0 && intersects[0].distance < safeDistance) {
-                            const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                            const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
                             const correction = normal.clone().multiplyScalar(safeDistance - intersects[0].distance);
                             newPosition.add(correction);
                         }
