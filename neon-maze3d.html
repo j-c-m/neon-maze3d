@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.31 (UUID: t1u0v9w8-x7y6-5z4a-b3c2-d1e0f9g8h7)</title>
+    <title>3D Neon Maze - v3.32 (UUID: u2v1w0x9-y8z7-6a5b-c4d3-e2f1g0h9i8)</title>
     <style>
         body {
             margin: 0;
@@ -173,8 +173,12 @@
          * Version 3.31 (UUID: t1u0v9w8-x7y6-5z4a-b3c2-d1e0f9g8h7)
          * - Enabled fog by default (fogActive = true), still toggleable with 'F' key
          *
+         * Version 3.32 (UUID: u2v1w0x9-y8z7-6a5b-c4d3-e2f1g0h9i8)
+         * - Merged continuous wall sections into single meshes for performance (reinstating and fixing v3.18 concept)
+         * - Updated culling and collision logic to handle merged walls correctly
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.31 -> 3.32) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.32 -> 3.33) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -197,8 +201,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.31:
-        // git commit -m "Version 3.31: Enabled fog by default (fogActive = true), still toggleable with 'F' key (UUID: t1u0v9w8-x7y6-5z4a-b3c2-d1e0f9g8h7)" neon-maze3d.html
+        // Git Commit Command for Version 3.32:
+        // git commit -m "Version 3.32: Merged continuous wall sections into single meshes for performance, updated culling and collision logic to handle merged walls (UUID: u2v1w0x9-y8z7-6a5b-c4d3-e2f1g0h9i8)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -270,11 +274,17 @@
             walls.forEach(w => scene.remove(w.mesh));
             walls = [];
 
+            // Merge vertical walls
             for (let x = 0; x <= mazeWidth; x++) {
-                for (let z = 0; z < mazeHeight; z++) {
-                    if (maze.vWalls[x][z]) {
-                        const geometry = new THREE.BoxGeometry(wallThickness, cellSize, cellSize);
-                        const isBoundary = x === 0 || x === mazeWidth;
+                let startZ = 0;
+                let isBoundary = (x === 0 || x === mazeWidth);
+                while (startZ < mazeHeight) {
+                    if (maze.vWalls[x][startZ]) {
+                        let length = 0;
+                        while (startZ + length < mazeHeight && maze.vWalls[x][startZ + length]) {
+                            length++;
+                        }
+                        const geometry = new THREE.BoxGeometry(wallThickness, cellSize, cellSize * length);
                         const material = new THREE.MeshPhongMaterial({
                             color: isBoundary ? boundaryColor : wallColor,
                             opacity: 0.5,
@@ -283,18 +293,29 @@
                             shininess: 30
                         });
                         const wall = new THREE.Mesh(geometry, material);
-                        wall.position.set(x * cellSize - mazeWidth * cellSize / 2, 0, z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2);
+                        const posX = x * cellSize - mazeWidth * cellSize / 2;
+                        const posZ = (startZ + (length - 1) / 2) * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
+                        wall.position.set(posX, 0, posZ);
                         scene.add(wall);
-                        walls.push({ mesh: wall, x: x, z: z, isVertical: true, isBoundary: isBoundary });
+                        walls.push({ mesh: wall, x: x, z: startZ, length: length, isVertical: true, isBoundary: isBoundary });
+                        startZ += length;
+                    } else {
+                        startZ++;
                     }
                 }
             }
 
-            for (let x = 0; x < mazeWidth; x++) {
-                for (let z = 0; z <= mazeHeight; z++) {
-                    if (maze.hWalls[x][z]) {
-                        const geometry = new THREE.BoxGeometry(cellSize, cellSize, wallThickness);
-                        const isBoundary = z === 0 || z === mazeHeight;
+            // Merge horizontal walls
+            for (let z = 0; z <= mazeHeight; z++) {
+                let startX = 0;
+                let isBoundary = (z === 0 || z === mazeHeight);
+                while (startX < mazeWidth) {
+                    if (maze.hWalls[startX][z]) {
+                        let length = 0;
+                        while (startX + length < mazeWidth && maze.hWalls[startX + length][z]) {
+                            length++;
+                        }
+                        const geometry = new THREE.BoxGeometry(cellSize * length, cellSize, wallThickness);
                         const material = new THREE.MeshPhongMaterial({
                             color: isBoundary ? boundaryColor : wallColor,
                             opacity: 0.5,
@@ -303,9 +324,14 @@
                             shininess: 30
                         });
                         const wall = new THREE.Mesh(geometry, material);
-                        wall.position.set(x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2, 0, z * cellSize - mazeHeight * cellSize / 2);
+                        const posX = (startX + (length - 1) / 2) * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
+                        const posZ = z * cellSize - mazeHeight * cellSize / 2;
+                        wall.position.set(posX, 0, posZ);
                         scene.add(wall);
-                        walls.push({ mesh: wall, x: x, z: z, isVertical: false, isBoundary: isBoundary });
+                        walls.push({ mesh: wall, x: startX, z: z, length: length, isVertical: false, isBoundary: isBoundary });
+                        startX += length;
+                    } else {
+                        startX++;
                     }
                 }
             }
@@ -356,8 +382,7 @@
             pointLight.position.set(startX, 2, startZ);
             scene.add(pointLight);
 
-            // Initialize fog (on by default)
-            scene.fog = null; // Will be set by updateFog
+            scene.fog = null;
             updateFog(floorCeilingColor);
 
             camera.position.set(startX, 0.1, startZ);
@@ -480,7 +505,7 @@
                         document.body.classList.toggle('debug-path');
                         renderPathMarkers();
                         break;
-                    case 'f': // Toggle fog
+                    case 'f':
                         fogActive = !fogActive;
                         updateFog(floor.material.color.getHex());
                         break;
@@ -604,7 +629,7 @@
 
         function updateFog(color) {
             if (fogActive) {
-                scene.fog = new THREE.Fog(color, 1, 4); // Near: 1 unit, Far: 4 units
+                scene.fog = new THREE.Fog(color, 1, 4);
             } else {
                 scene.fog = null;
             }
@@ -708,9 +733,10 @@
 
             const wallMeshes = walls.map(w => w.mesh);
 
-            // Raycast culling for walls
+            // Raycast culling for merged walls
             walls.forEach(wall => {
-                raycaster.set(camera.position, wall.mesh.position.clone().sub(camera.position).normalize());
+                const center = wall.mesh.position.clone();
+                raycaster.set(camera.position, center.sub(camera.position).normalize());
                 const intersects = raycaster.intersectObjects(wallMeshes);
                 wall.mesh.visible = intersects.length === 0 || intersects[0].object === wall.mesh;
             });
@@ -718,7 +744,6 @@
             floor.visible = true;
             ceiling.visible = true;
 
-            // Raycast culling for start and finish markers
             raycaster.set(camera.position, startMarker.position.clone().sub(camera.position).normalize());
             const startIntersects = raycaster.intersectObjects(wallMeshes);
             startMarker.visible = startIntersects.length === 0 || startIntersects[0].distance > camera.position.distanceTo(startMarker.position);
@@ -752,7 +777,7 @@
 
                 if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.2) {
                     const hitPoint = intersects[0].point;
-                    const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
+                    const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
                     const safeDistance = wallThickness + 0.2;
                     newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
                 }
@@ -786,7 +811,7 @@
 
                     if (intersects.length > 0 && intersects[0].distance <= moveDistance + wallThickness + 0.2) {
                         const hitPoint = intersects[0].point;
-                        const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
+                        const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
                         const safeDistance = wallThickness + 0.2;
                         newPosition = hitPoint.clone().sub(moveDir.clone().multiplyScalar(safeDistance));
                         velocity.projectOnPlane(normal);
