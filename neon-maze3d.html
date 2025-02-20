@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.35 (UUID: b5c4d3e2-f1g0-9h8i-j7k6-l5m4n3p2q1)</title>
+    <title>3D Neon Maze - v3.36 (UUID: x6y5z4a3-b2c1-8d7e-f6g5-h4i3j2k1l0)</title>
     <style>
         body {
             margin: 0;
@@ -187,8 +187,11 @@
          * - Improved wall sliding smoothness: reduced wallFriction (0.5 -> 0.1), added slide vector calculation, multi-directional raycasting
          * - Reintroduced 30x30 maze size option in menu, leveraging prior performance optimizations
          *
+         * Version 3.36 (UUID: x6y5z4a3-b2c1-8d7e-f6g5-h4i3j2k1l0)
+         * - Overhauled wall sliding to emulate modern FPS: removed wall friction, project movement onto wall plane, use multi-raycasting based on input for seamless sliding
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.35 -> 3.36) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.36 -> 3.37) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -211,8 +214,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.35:
-        // git commit -m "Version 3.35: Improved wall sliding smoothness with reduced friction and slide vector, reintroduced 30x30 maze option (UUID: b5c4d3e2-f1g0-9h8i-j7k6-l5m4n3p2q1)" neon-maze3d.html
+        // Git Commit Command for Version 3.36:
+        // git commit -m "Version 3.36: Overhauled wall sliding to emulate modern FPS with zero friction, input-based multi-raycasting, and plane projection for seamless movement (UUID: x6y5z4a3-b2c1-8d7e-f6g5-h4i3j2k1l0)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -403,7 +406,7 @@
         const maxSpeed = 0.8,
               acceleration = 0.1,
               friction = 0.15,
-              wallFriction = 0.1, // Reduced from 0.5 for smoother sliding
+              wallFriction = 0, // Set to 0 for FPS-style sliding
               rotationSpeed = 0.002,
               pathSpeed = 0.4,
               rotationLerpSpeed = 0.1;
@@ -544,7 +547,7 @@
         const quitButton = document.getElementById('quitButton');
 
         function setupMenu() {
-            const sizes = [10, 20, 30]; // Reintroduced 30x30
+            const sizes = [10, 20, 30];
             sizes.forEach(size => {
                 const btn = document.createElement('div');
                 btn.className = 'menu-button';
@@ -807,7 +810,7 @@
 
                 if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.2) {
                     const hitPoint = intersects[0].point;
-                    const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                    const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
                     const safeDistance = wallThickness + 0.2;
                     newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
                 }
@@ -820,59 +823,64 @@
             } else {
                 const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
                 const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-                const targetVelocity = new THREE.Vector3();
+                let moveDirection = new THREE.Vector3();
 
-                if (moveForward) targetVelocity.add(forward.clone().multiplyScalar(maxSpeed));
-                if (moveBackward) targetVelocity.add(forward.clone().multiplyScalar(-maxSpeed));
-                if (moveLeft) targetVelocity.add(right.clone().multiplyScalar(-maxSpeed));
-                if (moveRight) targetVelocity.add(right.clone().multiplyScalar(maxSpeed));
+                // Calculate intended movement based on input
+                if (moveForward) moveDirection.add(forward);
+                if (moveBackward) moveDirection.add(forward.clone().negate());
+                if (moveLeft) moveDirection.add(right.clone().negate());
+                if (moveRight) moveDirection.add(right);
 
-                velocity.lerp(targetVelocity, acceleration);
-                if (targetVelocity.length() === 0) velocity.multiplyScalar(1 - friction);
+                // Normalize direction and apply max speed
+                if (moveDirection.length() > 0) {
+                    moveDirection.normalize();
+                    velocity.copy(moveDirection.multiplyScalar(maxSpeed));
+                } else {
+                    velocity.lerp(new THREE.Vector3(0, 0, 0), friction);
+                }
 
-                const moveDir = velocity.clone().normalize();
-                const moveDistance = velocity.length() * 0.1;
+                const moveStep = velocity.clone().multiplyScalar(0.1);
                 let newPosition = camera.position.clone();
-                let isColliding = false;
 
-                if (moveDistance > 0) {
-                    // Multi-directional raycasting for smoother collision detection
-                    const directions = [forward, right, forward.clone().add(right).normalize(), forward.clone().sub(right).normalize()];
-                    let closestIntersection = null;
+                if (moveStep.length() > 0) {
+                    // Multi-raycast based on input directions
+                    const checkDirections = [];
+                    if (moveForward) checkDirections.push(forward);
+                    if (moveBackward) checkDirections.push(forward.clone().negate());
+                    if (moveLeft) checkDirections.push(right.clone().negate());
+                    if (moveRight) checkDirections.push(right);
+                    if (moveForward && moveRight) checkDirections.push(forward.clone().add(right).normalize());
+                    if (moveForward && moveLeft) checkDirections.push(forward.clone().sub(right).normalize());
+                    if (moveBackward && moveRight) checkDirections.push(forward.clone().negate().add(right).normalize());
+                    if (moveBackward && moveLeft) checkDirections.push(forward.clone().negate().sub(right).normalize());
 
-                    for (const dir of directions) {
-                        raycaster.set(camera.position, dir);
+                    let finalMove = moveStep.clone();
+                    const safeDistance = wallThickness + 0.2;
+
+                    for (const dir of checkDirections) {
+                        raycaster.set(newPosition, dir);
                         const intersects = raycaster.intersectObjects(wallMeshes);
-                        if (intersects.length > 0 && intersects[0].distance <= moveDistance + wallThickness + 0.2) {
-                            if (!closestIntersection || intersects[0].distance < closestIntersection.distance) {
-                                closestIntersection = intersects[0];
+                        if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + safeDistance) {
+                            const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                            // Project the movement onto the wall plane
+                            const moveDotNormal = finalMove.dot(normal);
+                            if (moveDotNormal < 0) {
+                                finalMove.sub(normal.clone().multiplyScalar(moveDotNormal));
                             }
                         }
                     }
 
-                    if (closestIntersection) {
-                        const hitPoint = closestIntersection.point;
-                        const normal = closestIntersection.face.normal.clone().applyQuaternion(closestIntersection.object.quaternion);
-                        const safeDistance = wallThickness + 0.2;
-                        newPosition = hitPoint.clone().sub(moveDir.clone().multiplyScalar(safeDistance));
+                    newPosition.add(finalMove);
 
-                        // Calculate slide vector along the wall
-                        const up = new THREE.Vector3(0, 1, 0);
-                        const slideDir = moveDir.clone().cross(normal).cross(normal).normalize();
-                        const slideVelocity = slideDir.multiplyScalar(velocity.length() * (1 - wallFriction));
-                        velocity.lerp(slideVelocity, 0.3); // Smooth transition to sliding
-                        newPosition.add(velocity.clone().multiplyScalar(0.1));
-                        isColliding = true;
-                    } else {
-                        newPosition.add(velocity.clone().multiplyScalar(0.1));
-                    }
-
-                    newPosition.x = Math.max(-mazeWidth * cellSize / 2 + wallThickness / 2, Math.min(mazeWidth * cellSize / 2 - wallThickness / 2, newPosition.x));
-                    newPosition.z = Math.max(-mazeHeight * cellSize / 2 + wallThickness / 2, Math.min(mazeHeight * cellSize / 2 - wallThickness / 2, newPosition.z));
+                    // Clamp position to maze boundaries
+                    newPosition.x = Math.max(-mazeWidth * cellSize / 2 + safeDistance, Math.min(mazeWidth * cellSize / 2 - safeDistance, newPosition.x));
+                    newPosition.z = Math.max(-mazeHeight * cellSize / 2 + safeDistance, Math.min(mazeHeight * cellSize / 2 - safeDistance, newPosition.z));
                 }
 
                 camera.position.copy(newPosition);
-                if (!isColliding && velocity.length() < 0.01) velocity.set(0, 0, 0);
+                if (velocity.length() < 0.01 && !moveForward && !moveBackward && !moveLeft && !moveRight) {
+                    velocity.set(0, 0, 0);
+                }
             }
 
             const distanceToFinish = camera.position.distanceTo(finishMarker.position);
