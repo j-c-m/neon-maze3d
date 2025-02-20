@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.29 (UUID: q9r8s7t6-v5u4-3w2x-y1z0-a9b8c7d6e5)</title>
+    <title>3D Neon Maze - v3.30 (UUID: r0s9t8u7-v6w5-4x3y-z2a1-b0c9d8e7f6)</title>
     <style>
         body {
             margin: 0;
@@ -166,6 +166,10 @@
          * Version 3.29 (UUID: q9r8s7t6-v5u4-3w2x-y1z0-a9b8c7d6e5)
          * - Removed 30x30 maze size option from menu to improve performance, retaining 10x10 and 20x20
          *
+         * Version 3.30 (UUID: r0s9t8u7-v6w5-4x3y-z2a1-b0c9d8e7f6)
+         * - Added toggleable fog effect with 'F' key (default off) to limit visibility and enhance neon atmosphere
+         * - Fog parameters: near=1, far=4, color matches floor/ceiling for cohesion
+         *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 3.29 -> 3.30) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
@@ -185,14 +189,13 @@
          * - Add difficulty levels affecting maze complexity (e.g., more dead ends, longer paths)
          * - Implement a minimap showing player position and maze outline
          * - Add collectible items that increase score when picked up
-         * - Introduce a fog effect to limit visibility beyond culling distance
          * - Add sound effects for movement, collisions, and completion
          * - Implement a leaderboard system with local storage for high scores
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.29:
-        // git commit -m "Version 3.29: Removed 30x30 maze size option from menu to improve performance, retaining 10x10 and 20x20 (UUID: q9r8s7t6-v5u4-3w2x-y1z0-a9b8c7d6e5)" neon-maze3d.html
+        // Git Commit Command for Version 3.30:
+        // git commit -m "Version 3.30: Added toggleable fog effect with 'F' key (default off) to limit visibility and enhance neon atmosphere (UUID: r0s9t8u7-v6w5-4x3y-z2a1-b0c9d8e7f6)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -208,6 +211,7 @@
         let gameActive = false, startTime, score = 0;
         let start = { x: 0, z: 0 }, finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
         let path = null, pathIndex = 0, pathMarkers = [];
+        let fogActive = false; // Fog toggle state
 
         let pointLight;
 
@@ -349,12 +353,15 @@
             pointLight.position.set(startX, 2, startZ);
             scene.add(pointLight);
 
+            // Initialize fog (off by default)
+            scene.fog = null; // Will be set when toggled on
+            updateFog(floorCeilingColor);
+
             camera.position.set(startX, 0.1, startZ);
             gameActive = true;
         }
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        let velocity = new THREE.Vector3(0, 0, 0);
         const maxSpeed = 0.8,
               acceleration = 0.1,
               friction = 0.15,
@@ -362,6 +369,7 @@
               rotationSpeed = 0.002,
               pathSpeed = 0.4,
               rotationLerpSpeed = 0.1;
+        let velocity = new THREE.Vector3(0, 0, 0);
         const raycaster = new THREE.Raycaster();
 
         camera.rotation.y = Math.PI / 2;
@@ -469,6 +477,10 @@
                         document.body.classList.toggle('debug-path');
                         renderPathMarkers();
                         break;
+                    case 'f': // Toggle fog
+                        fogActive = !fogActive;
+                        updateFog(floor.material.color.getHex());
+                        break;
                 }
             } else if (e.key === ' ' && achievementElement.style.display === 'block') {
                 restartGame();
@@ -494,7 +506,7 @@
         const quitButton = document.getElementById('quitButton');
 
         function setupMenu() {
-            const sizes = [10, 20]; // Removed 30x30
+            const sizes = [10, 20];
             sizes.forEach(size => {
                 const btn = document.createElement('div');
                 btn.className = 'menu-button';
@@ -585,6 +597,14 @@
                 const v = c === 'x' ? r : (r & 0x3 | 0x8);
                 return v.toString(16);
             });
+        }
+
+        function updateFog(color) {
+            if (fogActive) {
+                scene.fog = new THREE.Fog(color, 1, 4); // Near: 1 unit, Far: 4 units
+            } else {
+                scene.fog = null;
+            }
         }
 
         function updateUI() {
@@ -763,7 +783,7 @@
 
                     if (intersects.length > 0 && intersects[0].distance <= moveDistance + wallThickness + 0.2) {
                         const hitPoint = intersects[0].point;
-                        const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                        const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
                         const safeDistance = wallThickness + 0.2;
                         newPosition = hitPoint.clone().sub(moveDir.clone().multiplyScalar(safeDistance));
                         velocity.projectOnPlane(normal);
