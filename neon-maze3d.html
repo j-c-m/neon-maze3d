@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.34 (UUID: w4x3y2z1-a0b9-8c7d-e6f5-g4h3i2j1k0)</title>
+    <title>3D Neon Maze - v3.35 (UUID: b5c4d3e2-f1g0-9h8i-j7k6-l5m4n3p2q1)</title>
     <style>
         body {
             margin: 0;
@@ -183,8 +183,12 @@
          * Version 3.34 (UUID: w4x3y2z1-a0b9-8c7d-e6f5-g4h3i2j1k0)
          * - Enhanced culling to raycast at every cell along merged walls, ensuring visibility if any part is unobstructed
          *
+         * Version 3.35 (UUID: b5c4d3e2-f1g0-9h8i-j7k6-l5m4n3p2q1)
+         * - Improved wall sliding smoothness: reduced wallFriction (0.5 -> 0.1), added slide vector calculation, multi-directional raycasting
+         * - Reintroduced 30x30 maze size option in menu, leveraging prior performance optimizations
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.34 -> 3.35) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.35 -> 3.36) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -207,8 +211,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.34:
-        // git commit -m "Version 3.34: Enhanced culling to raycast at every cell along merged walls, ensuring visibility if any part is unobstructed (UUID: w4x3y2z1-a0b9-8c7d-e6f5-g4h3i2j1k0)" neon-maze3d.html
+        // Git Commit Command for Version 3.35:
+        // git commit -m "Version 3.35: Improved wall sliding smoothness with reduced friction and slide vector, reintroduced 30x30 maze option (UUID: b5c4d3e2-f1g0-9h8i-j7k6-l5m4n3p2q1)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -399,7 +403,7 @@
         const maxSpeed = 0.8,
               acceleration = 0.1,
               friction = 0.15,
-              wallFriction = 0.5,
+              wallFriction = 0.1, // Reduced from 0.5 for smoother sliding
               rotationSpeed = 0.002,
               pathSpeed = 0.4,
               rotationLerpSpeed = 0.1;
@@ -540,7 +544,7 @@
         const quitButton = document.getElementById('quitButton');
 
         function setupMenu() {
-            const sizes = [10, 20];
+            const sizes = [10, 20, 30]; // Reintroduced 30x30
             sizes.forEach(size => {
                 const btn = document.createElement('div');
                 btn.className = 'menu-button';
@@ -803,7 +807,7 @@
 
                 if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.2) {
                     const hitPoint = intersects[0].point;
-                    const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
+                    const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
                     const safeDistance = wallThickness + 0.2;
                     newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
                 }
@@ -832,16 +836,32 @@
                 let isColliding = false;
 
                 if (moveDistance > 0) {
-                    raycaster.set(camera.position, moveDir);
-                    const intersects = raycaster.intersectObjects(wallMeshes);
+                    // Multi-directional raycasting for smoother collision detection
+                    const directions = [forward, right, forward.clone().add(right).normalize(), forward.clone().sub(right).normalize()];
+                    let closestIntersection = null;
 
-                    if (intersects.length > 0 && intersects[0].distance <= moveDistance + wallThickness + 0.2) {
-                        const hitPoint = intersects[0].point;
-                        const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
+                    for (const dir of directions) {
+                        raycaster.set(camera.position, dir);
+                        const intersects = raycaster.intersectObjects(wallMeshes);
+                        if (intersects.length > 0 && intersects[0].distance <= moveDistance + wallThickness + 0.2) {
+                            if (!closestIntersection || intersects[0].distance < closestIntersection.distance) {
+                                closestIntersection = intersects[0];
+                            }
+                        }
+                    }
+
+                    if (closestIntersection) {
+                        const hitPoint = closestIntersection.point;
+                        const normal = closestIntersection.face.normal.clone().applyQuaternion(closestIntersection.object.quaternion);
                         const safeDistance = wallThickness + 0.2;
                         newPosition = hitPoint.clone().sub(moveDir.clone().multiplyScalar(safeDistance));
-                        velocity.projectOnPlane(normal);
-                        velocity.multiplyScalar(1 - wallFriction);
+
+                        // Calculate slide vector along the wall
+                        const up = new THREE.Vector3(0, 1, 0);
+                        const slideDir = moveDir.clone().cross(normal).cross(normal).normalize();
+                        const slideVelocity = slideDir.multiplyScalar(velocity.length() * (1 - wallFriction));
+                        velocity.lerp(slideVelocity, 0.3); // Smooth transition to sliding
+                        newPosition.add(velocity.clone().multiplyScalar(0.1));
                         isColliding = true;
                     } else {
                         newPosition.add(velocity.clone().multiplyScalar(0.1));
