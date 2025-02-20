@@ -869,7 +869,7 @@
                         raycaster.set(camera.position, dir);
                         const intersects = raycaster.intersectObjects(wallMeshes);
                         if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + safeDistance) {
-                            const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
+                            const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
                             const moveDotNormal = finalMove.dot(normal);
                             if (moveDotNormal < 0) {
                                 finalMove.sub(normal.clone().multiplyScalar(moveDotNormal));
@@ -890,7 +890,7 @@
                         raycaster.set(newPosition, dir);
                         const intersects = raycaster.intersectObjects(wallMeshes);
                         if (intersects.length > 0 && intersects[0].distance < safeDistance) {
-                            const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
+                            const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
                             const correction = normal.clone().multiplyScalar(safeDistance - intersects[0].distance);
                             newPosition.add(correction);
                         }
