@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>3D Neon Maze - v3.28 (UUID: p8q7r6s5-u4t3-2v1w-x0y9-z8a7b6c5d4)</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            touch-action: none;
+        }
+        canvas {
+            width: 100%;
+            height: 100vh;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            font-size: 16px;
+            z-index: 20;
+        }
+        #achievementElement, #restartButton, #menu {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 20;
+            touch-action: none;
+        }
+        #achievementElement {
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+        }
+        #restartButton {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            display: none;
+        }
+        #menu {
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .menu-button {
+            padding: 8px 16px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .menu-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">Score: 0 | Time: 0s</div>
+    <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
+    <div id="restartButton">Tap to Restart</div>
+    <div id="menu">
+        <div class="menu-button" id="startButton">Start Game</div>
+        <div class="menu-button" id="quitButton">Quit</div>
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
+    <script>
+        /*
+         * Changelog:
+         * Version 3.3 (UUID: i7j8k9l0-m1n2-4o3p-q4r5-s6t7u8v9w0x1)
+         * - Initial version with neon visuals, dynamic lighting, performance optimizations, touch/mouse controls, scoring, timer, menu system, wall collision, win condition
+         * - Removed audio, fixed Matrix4.getInverse() deprecation, fixed isFloorCeilingVisible reference error
+         *
+         * Version 3.4 (UUID: a1b2c3d4-e5f6-7g8h-i9j0-k1l2m3n4o5p6)
+         * - Removed particle effects from finish marker, reverted start/finish to spheres
+         *
+         * Version 3.5 (UUID: p9q8r7s6-t5u4-3v2w-x1y0-z9a8b7c6d5)
+         * - Added win condition detection, adjusted culling to not hide objects blocked by start/finish spheres
+         *
+         * Version 3.6 (UUID: m6n5p4q3-r2s1-0t9u-v8w7-x6y5z4a3b2)
+         * - Reduced wall thickness to 0.01, maintained visibility and collision logic
+         *
+         * Version 3.7 (UUID: k7l6m5n4-p3q2-1r0s-t9u8-v7w6x5y4z3)
+         * - Enhanced collision detection with smaller step size to prevent passing through thin walls
+         *
+         * Version 3.8 (UUID: j8k7l6m5-n4p3-2q1r-s0t9-u8v7w6x5y4)
+         * - Replaced collision with raycasting-based system to definitively prevent wall clipping
+         *
+         * Version 3.9 (UUID: h9j8k7l6-m5n4-3p2q-r1s0-t9u8v7w6x5)
+         * - Extended wall collision boundary by 0.2 units
+         *
+         * Version 3.10 (UUID: g0h9i8j7-k6l5-4m3n-p2q1-r0s9t8u7v6)
+         * - Eliminated visual bouncing during wall collisions with refined response and increased wall friction
+         *
+         * Version 3.11 (UUID: f1g0h9i8-j7k6-5l4m-n3p2-q1r0s9t8u7)
+         * - Added A* pathfinding triggered by 'T' key to auto-solve the maze
+         *
+         * Version 3.12 (UUID: e2f1g0h9-i8j7-6k5l-m4n3-p2q1r0s9t8)
+         * - 'T' key toggles pathfinding (start/stop), added smooth camera rotation during pathfinding
+         *
+         * Version 3.13 (UUID: d3e2f1g0-h9i8-7j6k-l5m4-n3p2q1r0s9)
+         * - During pathfinding, player only moves forward, using camera rotation for direction changes
+         * - Added changelog in source code
+         *
+         * Version 3.14 (UUID: c4d3e2f1-g0h9-8i7j-k6l5-m4n3p2q1r0)
+         * - Smoothed and slowed automatic pathfinding (pathSpeed 0.5 -> 0.2, step multiplier 0.1 -> 0.05)
+         * - Added instructions for future changes in comments
+         *
+         * Version 3.15 (UUID: b5c4d3e2-f1g0-9h8i-j7k6-l5m4n3p2q1)
+         * - Increased pathSpeed from 0.2 to 0.4 for faster but still smooth pathfinding
+         * - Added Git commit command generation for all future changes
+         *
+         * Version 3.16 (UUID: d6e5f4g3-h2i1-9j8k-l7m6-n5p4q3r2s1)
+         * - Added pulsating finish marker when player is within 2 units
+         *
+         * Version 3.17 (UUID: e7f6g5h4-i3j2-8k9l-m6n5-p4q3r2s1t0)
+         * - Added toggleable path visualization with 'P' key for debugging
+         *
+         * Version 3.18 (UUID: f8g7h6i5-j4k3-9l2m-n1p0-q9r8s7t6u5)
+         * - Optimized wall rendering by merging adjacent walls into single meshes
+         *
+         * Version 3.19 (UUID: g9h8i7j6-k5l4-3m2n-p1q0-r9s8t7u6v5)
+         * - Added maze size selection (10x10, 20x20, 30x30) in menu
+         *
+         * Version 3.20 (UUID: h0i9j8k7-l6m5-4n3p-q2r1-s0t9u8v7w6)
+         * - Updated collision and culling logic to support merged walls from v3.18
+         *
+         * Version 3.21 (UUID: i1j0k9l8-m7n6-5p4q-r3s2-t1u0v9w8x7)
+         * - Relaxed visual culling to render walls adjacent to visible walls up to depth 1
+         *
+         * Version 3.22 (UUID: j2k1l0m9-n8p7-6q5r-s4t3-u2v1w0x9y8)
+         * - Reverted wall merging from v3.18 due to persistent issues, restored individual wall rendering
+         *
+         * Version 3.23 (UUID: k3l2m1n0-p9q8-7r6s-t5u4-v3w2x1y0z9)
+         * - Lowered camera height from 0.3 to 0.1
+         * - Set initial movement speed to 0 after start/restart
+         * - Added spacebar and touch interaction for restart after winning
+         *
+         * Version 3.24 (UUID: l4m3n2o1-q0p9-8r7s-t6u5-v4w3x2y1z0)
+         * - Removed adjacent wall culling logic (removed isFloorCeilingVisible)
+         * - Changed visual culling to render walls up to 2 walls deep from player position
+         *
+         * Version 3.25 (UUID: m5n4o3p2-r1q0-9s8t-u7v6-w5x4y3z2a1)
+         * - Applied 2-wall depth culling to start and finish spheres
+         * - Updated instructions to prohibit summarizing previous changes in brackets and require full source code
+         *
+         * Version 3.26 (UUID: n6o5p4q3-s2r1-0t9u-v8w7-x6y5z4a3b2)
+         * - Updated start and finish sphere culling to use raycasting, ensuring they are only visible when not blocked by walls
+         *
+         * Version 3.27 (UUID: o7p6q5r4-t3s2-1u0v-w9x8-y7z6a5b4c3)
+         * - Reduced wall culling depth from 2 to 1
+         * - Added TODO section with ideas for future changes
+         *
+         * Version 3.28 (UUID: p8q7r6s5-u4t3-2v1w-x0y9-z8a7b6c5d4)
+         * - Updated wall culling to use raycasting, matching visibility rules of start and finish spheres
+         *
+         * Instructions for Future Changes:
+         * 1. Increment the version number (e.g., 3.28 -> 3.29) in the <title> and changelog.
+         * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
+         * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
+         * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
+         * 5. Do not summarize previous code changes in brackets; always provide the full source code in its entirety.
+         *
+         * Useful Constants and Tips:
+         * - maxSpeed (0.8): Controls manual movement speed; increase for faster movement, decrease for slower.
+         * - pathSpeed (0.4): Controls auto-pathfinding speed; adjust between 0.1-1.0 for desired pace (current 0.4 is moderate).
+         * - rotationLerpSpeed (0.1): Controls camera rotation speed during pathfinding; 0.05-0.5 range for smooth adjustments.
+         * - wallThickness (0.01): Minimum visible thickness; avoid <0.01 to prevent rendering issues.
+         * - safeDistance (wallThickness + 0.2): Collision buffer; tweak 0.2 for larger/smaller wall boundaries.
+         * - To debug pathfinding: Log 'path' variable or toggle path markers with 'P'.
+         *
+         * TODO - Ideas for Future Changes:
+         * - Add difficulty levels affecting maze complexity (e.g., more dead ends, longer paths)
+         * - Implement a minimap showing player position and maze outline
+         * - Add collectible items that increase score when picked up
+         * - Introduce a fog effect to limit visibility beyond culling distance
+         * - Add sound effects for movement, collisions, and completion
+         * - Implement a leaderboard system with local storage for high scores
+         * - Add dynamic obstacles that move within the maze
+         */
+
+        // Git Commit Command for Version 3.28:
+        // git commit -m "Version 3.28: Updated wall culling to use raycasting, matching visibility rules of start and finish spheres (UUID: p8q7r6s5-u4t3-2v1w-x0y9-z8a7b6c5d4)"
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        let mazeWidth = 20, mazeHeight = 20;
+        const cellSize = 2;
+        const wallThickness = 0.01;
+        let maze = [], walls = [], floor, ceiling, startMarker, finishMarker;
+        let gameActive = false, startTime, score = 0;
+        let start = { x: 0, z: 0 }, finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
+        let path = null, pathIndex = 0, pathMarkers = [];
+
+        let pointLight;
+
+        function generateMaze() {
+            maze = [];
+            for (let x = 0; x < mazeWidth; x++) {
+                maze[x] = [];
+                for (let z = 0; z < mazeHeight; z++) {
+                    maze[x][z] = 0;
+                }
+            }
+
+            let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
+            let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
+
+            function carve(x, z) {
+                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+                directions.sort(() => Math.random() - 0.5);
+
+                for (let [dx, dz] of directions) {
+                    const nx = x + dx, nz = z + dz;
+                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && maze[nx][nz] === 0) {
+                        if (dx === 1) vWalls[x + 1][z] = false;
+                        else if (dx === -1) vWalls[x][z] = false;
+                        else if (dz === 1) hWalls[x][z + 1] = false;
+                        else if (dz === -1) hWalls[x][z] = false;
+                        maze[nx][nz] = 1;
+                        carve(nx, nz);
+                    }
+                }
+            }
+
+            start.x = Math.floor(Math.random() * mazeWidth);
+            start.z = Math.floor(Math.random() * mazeHeight);
+            maze[start.x][start.z] = 1;
+            carve(start.x, start.z);
+
+            do {
+                finish.x = Math.floor(Math.random() * mazeWidth);
+                finish.z = Math.floor(Math.random() * mazeHeight);
+            } while (maze[finish.x][finish.z] === 0 || (finish.x === start.x && finish.z === start.z));
+
+            maze.vWalls = vWalls;
+            maze.hWalls = hWalls;
+        }
+
+        function renderMaze() {
+            const neonColors = [0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa];
+            const wallColor = neonColors[Math.floor(Math.random() * neonColors.length)];
+            const floorCeilingColor = neonColors[Math.floor(Math.random() * neonColors.length)];
+            const boundaryColor = neonColors[(neonColors.indexOf(wallColor) + 1) % neonColors.length];
+
+            walls.forEach(w => scene.remove(w.mesh));
+            walls = [];
+
+            for (let x = 0; x <= mazeWidth; x++) {
+                for (let z = 0; z < mazeHeight; z++) {
+                    if (maze.vWalls[x][z]) {
+                        const geometry = new THREE.BoxGeometry(wallThickness, cellSize, cellSize);
+                        const isBoundary = x === 0 || x === mazeWidth;
+                        const material = new THREE.MeshPhongMaterial({
+                            color: isBoundary ? boundaryColor : wallColor,
+                            opacity: 0.5,
+                            transparent: true,
+                            side: THREE.DoubleSide,
+                            shininess: 30
+                        });
+                        const wall = new THREE.Mesh(geometry, material);
+                        wall.position.set(x * cellSize - mazeWidth * cellSize / 2, 0, z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2);
+                        scene.add(wall);
+                        walls.push({ mesh: wall, x: x, z: z, isVertical: true, isBoundary: isBoundary });
+                    }
+                }
+            }
+
+            for (let x = 0; x < mazeWidth; x++) {
+                for (let z = 0; z <= mazeHeight; z++) {
+                    if (maze.hWalls[x][z]) {
+                        const geometry = new THREE.BoxGeometry(cellSize, cellSize, wallThickness);
+                        const isBoundary = z === 0 || z === mazeHeight;
+                        const material = new THREE.MeshPhongMaterial({
+                            color: isBoundary ? boundaryColor : wallColor,
+                            opacity: 0.5,
+                            transparent: true,
+                            side: THREE.DoubleSide,
+                            shininess: 30
+                        });
+                        const wall = new THREE.Mesh(geometry, material);
+                        wall.position.set(x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2, 0, z * cellSize - mazeHeight * cellSize / 2);
+                        scene.add(wall);
+                        walls.push({ mesh: wall, x: x, z: z, isVertical: false, isBoundary: isBoundary });
+                    }
+                }
+            }
+
+            const floorGeometry = new THREE.BoxGeometry(mazeWidth * cellSize, wallThickness, mazeHeight * cellSize);
+            const floorMaterial = new THREE.MeshPhongMaterial({
+                color: floorCeilingColor,
+                opacity: 0.3,
+                transparent: true,
+                side: THREE.DoubleSide,
+                shininess: 10
+            });
+            floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.position.set(0, -cellSize / 2 + wallThickness / 2, 0);
+            scene.add(floor);
+
+            const ceilingGeometry = new THREE.BoxGeometry(mazeWidth * cellSize, wallThickness, mazeHeight * cellSize);
+            const ceilingMaterial = new THREE.MeshPhongMaterial({
+                color: floorCeilingColor,
+                opacity: 0.3,
+                transparent: true,
+                side: THREE.DoubleSide,
+                shininess: 10
+            });
+            ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+            ceiling.position.set(0, cellSize / 2 - wallThickness / 2, 0);
+            scene.add(ceiling);
+
+            const startMarkerGeometry = new THREE.SphereGeometry(0.3);
+            const startMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, shininess: 50 });
+            startMarker = new THREE.Mesh(startMarkerGeometry, startMarkerMaterial);
+            const startX = start.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
+            const startZ = start.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
+            startMarker.position.set(startX, 0, startZ);
+            scene.add(startMarker);
+
+            const finishMarkerGeometry = new THREE.SphereGeometry(0.3);
+            const finishMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 50 });
+            finishMarker = new THREE.Mesh(finishMarkerGeometry, finishMarkerMaterial);
+            const finishX = finish.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
+            const finishZ = finish.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
+            finishMarker.position.set(finishX, 0, finishZ);
+            scene.add(finishMarker);
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            scene.add(ambientLight);
+            pointLight = new THREE.PointLight(0xffffff, 0.8, 50);
+            pointLight.position.set(startX, 2, startZ);
+            scene.add(pointLight);
+
+            camera.position.set(startX, 0.1, startZ);
+            gameActive = true;
+        }
+
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
+        let velocity = new THREE.Vector3(0, 0, 0);
+        const maxSpeed = 0.8,
+              acceleration = 0.1,
+              friction = 0.15,
+              wallFriction = 0.5,
+              rotationSpeed = 0.002,
+              pathSpeed = 0.4,
+              rotationLerpSpeed = 0.1;
+        const raycaster = new THREE.Raycaster();
+
+        camera.rotation.y = Math.PI / 2;
+
+        document.addEventListener('mousemove', (e) => {
+            if (gameActive && !path) camera.rotation.y -= e.movementX * rotationSpeed;
+        });
+        document.body.requestPointerLock = document.body.requestPointerLock || document.body.mozRequestPointerLock;
+        document.addEventListener('click', () => {
+            if (gameActive && !path) document.body.requestPointerLock();
+        });
+
+        let touchStartX = 0, touchStartY = 0;
+        let touchActive = false, touchMoveActive = false, touchLookActive = false;
+        let lastTouchX = 0, lastTouchY = 0;
+        let touchMoveZone, touchLookZone;
+
+        function setupTouchZones() {
+            const screenWidth = window.innerWidth;
+            touchMoveZone = screenWidth * 0.5;
+            touchLookZone = screenWidth * 0.5;
+        }
+
+        setupTouchZones();
+        window.addEventListener('resize', setupTouchZones);
+
+        document.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1 && gameActive && !path) {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                touchActive = true;
+                lastTouchX = touchStartX;
+                lastTouchY = touchStartY;
+
+                touchMoveActive = touchStartX < touchMoveZone;
+                touchLookActive = touchStartX >= touchLookZone;
+            }
+        });
+
+        document.addEventListener('touchmove', (e) => {
+            if (touchActive && e.touches.length === 1 && gameActive && !path) {
+                const touchX = e.touches[0].clientX;
+                const touchY = e.touches[0].clientY;
+                const deltaX = touchX - lastTouchX;
+                const deltaY = touchY - lastTouchY;
+
+                if (touchMoveActive) {
+                    if (Math.abs(deltaY) > Math.abs(deltaX) * 1.5) {
+                        moveForward = deltaY < 0;
+                        moveBackward = deltaY > 0;
+                        moveLeft = false;
+                        moveRight = false;
+                    } else if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                        moveLeft = deltaX < 0;
+                        moveRight = deltaX > 0;
+                        moveForward = false;
+                        moveBackward = false;
+                    }
+                }
+
+                if (touchLookActive) {
+                    const lookDeltaX = deltaX * 0.001;
+                    const lookDeltaY = deltaY * 0.0005;
+                    camera.rotation.y -= lookDeltaX;
+                    camera.rotation.x = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, camera.rotation.x - lookDeltaY));
+                }
+
+                lastTouchX = touchX;
+                lastTouchY = touchY;
+            }
+        });
+
+        document.addEventListener('touchend', () => {
+            if (gameActive && !path) {
+                touchActive = false;
+                touchMoveActive = false;
+                touchLookActive = false;
+                moveForward = moveBackward = moveLeft = moveRight = false;
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (gameActive) {
+                switch (e.key.toLowerCase()) {
+                    case 'w': if (!path) moveForward = true; break;
+                    case 's': if (!path) moveBackward = true; break;
+                    case 'a': if (!path) moveLeft = true; break;
+                    case 'd': if (!path) moveRight = true; break;
+                    case 't':
+                        if (path) {
+                            path = null;
+                            velocity.set(0, 0, 0);
+                            renderPathMarkers();
+                        } else {
+                            const startX = Math.floor((camera.position.x + mazeWidth * cellSize / 2) / cellSize);
+                            const startZ = Math.floor((camera.position.z + mazeHeight * cellSize / 2) / cellSize);
+                            path = aStarPathfinding({ x: startX, z: startZ }, finish);
+                            pathIndex = 0;
+                            moveForward = moveBackward = moveLeft = moveRight = false;
+                            velocity.set(0, 0, 0);
+                            renderPathMarkers();
+                        }
+                        break;
+                    case 'p':
+                        document.body.classList.toggle('debug-path');
+                        renderPathMarkers();
+                        break;
+                }
+            } else if (e.key === ' ' && achievementElement.style.display === 'block') {
+                restartGame();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (gameActive && !path) {
+                switch (e.key.toLowerCase()) {
+                    case 'w': moveForward = false; break;
+                    case 's': moveBackward = false; break;
+                    case 'a': moveLeft = false; break;
+                    case 'd': moveRight = false; break;
+                }
+            }
+        });
+
+        const uiElement = document.getElementById('ui');
+        const achievementElement = document.getElementById('achievementElement');
+        const restartButton = document.getElementById('restartButton');
+        const menu = document.getElementById('menu');
+        const startButton = document.getElementById('startButton');
+        const quitButton = document.getElementById('quitButton');
+
+        function setupMenu() {
+            const sizes = [10, 20, 30];
+            sizes.forEach(size => {
+                const btn = document.createElement('div');
+                btn.className = 'menu-button';
+                btn.textContent = `${size}x${size}`;
+                btn.addEventListener('click', () => {
+                    mazeWidth = mazeHeight = size;
+                    finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
+                    hideMenu();
+                });
+                menu.insertBefore(btn, quitButton);
+            });
+        }
+
+        function showMenu() {
+            menu.style.display = 'flex';
+            gameActive = false;
+        }
+
+        function hideMenu() {
+            menu.style.display = 'none';
+            startGame();
+        }
+
+        [startButton, quitButton, achievementElement, restartButton].forEach(element => {
+            element.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouchEvent(element); });
+            element.addEventListener('click', (e) => { e.preventDefault(); handleTouchEvent(element); });
+        });
+
+        function handleTouchEvent(element) {
+            if (element === startButton) {
+                hideMenu();
+            } else if (element === quitButton) {
+                alert('Game quit. Reload to start again.');
+                gameActive = false;
+                menu.style.display = 'none';
+            } else if (element === achievementElement || element === restartButton) {
+                if (!gameActive) restartGame();
+            }
+        }
+
+        function startGame() {
+            console.log("Starting game...");
+            gameActive = true;
+            startTime = performance.now();
+            score = 0;
+            path = null;
+            velocity.set(0, 0, 0);
+            moveForward = moveBackward = moveLeft = moveRight = false;
+            updateUI();
+            generateMaze();
+            renderMaze();
+            animate();
+        }
+
+        function showAchievement() {
+            achievementElement.style.display = 'block';
+            restartButton.style.display = 'block';
+            gameActive = false;
+            path = null;
+            const timeTaken = Math.floor((performance.now() - startTime) / 1000);
+            score = Math.max(0, 1000 - timeTaken * 10);
+            updateUI();
+        }
+
+        function restartGame() {
+            scene.clear();
+            walls = [];
+            maze = [];
+            start = { x: 0, z: 0 };
+            finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
+            gameActive = true;
+            startTime = performance.now();
+            path = null;
+            velocity.set(0, 0, 0);
+            moveForward = moveBackward = moveLeft = moveRight = false;
+            pathMarkers.forEach(marker => scene.remove(marker));
+            pathMarkers = [];
+            generateMaze();
+            renderMaze();
+            achievementElement.style.display = 'none';
+            restartButton.style.display = 'none';
+            animate();
+        }
+
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function updateUI() {
+            if (gameActive) {
+                const timeElapsed = Math.floor((performance.now() - startTime) / 1000);
+                uiElement.textContent = `Score: ${score} | Time: ${timeElapsed}s`;
+            }
+        }
+
+        function renderPathMarkers() {
+            pathMarkers.forEach(marker => scene.remove(marker));
+            pathMarkers = [];
+            if (path && document.body.classList.contains('debug-path')) {
+                path.forEach(node => {
+                    const marker = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.05),
+                        new THREE.MeshBasicMaterial({ color: 0x00ffff })
+                    );
+                    marker.position.set(
+                        node.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2,
+                        0,
+                        node.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2
+                    );
+                    scene.add(marker);
+                    pathMarkers.push(marker);
+                });
+            }
+        }
+
+        function aStarPathfinding(startPos, endPos) {
+            const openSet = [startPos];
+            const cameFrom = new Map();
+            const gScore = new Map();
+            const fScore = new Map();
+
+            gScore.set(`${startPos.x},${startPos.z}`, 0);
+            fScore.set(`${startPos.x},${startPos.z}`, heuristic(startPos, endPos));
+
+            while (openSet.length > 0) {
+                openSet.sort((a, b) => fScore.get(`${a.x},${a.z}`) - fScore.get(`${b.x},${b.z}`));
+                const current = openSet.shift();
+
+                if (current.x === endPos.x && current.z === endPos.z) {
+                    return reconstructPath(cameFrom, current);
+                }
+
+                const neighbors = getNeighbors(current);
+                for (const neighbor of neighbors) {
+                    const tentativeGScore = gScore.get(`${current.x},${current.z}`) + 1;
+                    const neighborKey = `${neighbor.x},${neighbor.z}`;
+
+                    if (!gScore.has(neighborKey) || tentativeGScore < gScore.get(neighborKey)) {
+                        cameFrom.set(neighborKey, current);
+                        gScore.set(neighborKey, tentativeGScore);
+                        fScore.set(neighborKey, tentativeGScore + heuristic(neighbor, endPos));
+                        if (!openSet.some(n => n.x === neighbor.x && n.z === neighbor.z)) {
+                            openSet.push(neighbor);
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        function heuristic(a, b) {
+            return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
+        }
+
+        function getNeighbors(pos) {
+            const neighbors = [];
+            const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+            for (const [dx, dz] of directions) {
+                const nx = pos.x + dx;
+                const nz = pos.z + dz;
+                if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
+                    if (dx === 1 && !maze.vWalls[pos.x + 1][pos.z]) neighbors.push({ x: nx, z: nz });
+                    else if (dx === -1 && !maze.vWalls[pos.x][pos.z]) neighbors.push({ x: nx, z: nz });
+                    else if (dz === 1 && !maze.hWalls[pos.x][pos.z + 1]) neighbors.push({ x: nx, z: nz });
+                    else if (dz === -1 && !maze.hWalls[pos.x][pos.z]) neighbors.push({ x: nx, z: nz });
+                }
+            }
+            return neighbors;
+        }
+
+        function reconstructPath(cameFrom, current) {
+            const path = [current];
+            while (cameFrom.has(`${current.x},${current.z}`)) {
+                current = cameFrom.get(`${current.x},${current.z}`);
+                path.unshift(current);
+            }
+            return path;
+        }
+
+        function animate() {
+            if (!gameActive) return;
+
+            requestAnimationFrame(animate);
+
+            const wallMeshes = walls.map(w => w.mesh);
+
+            // Raycast culling for walls
+            walls.forEach(wall => {
+                raycaster.set(camera.position, wall.mesh.position.clone().sub(camera.position).normalize());
+                const intersects = raycaster.intersectObjects(wallMeshes);
+                wall.mesh.visible = intersects.length === 0 || intersects[0].object === wall.mesh;
+            });
+
+            floor.visible = true;
+            ceiling.visible = true;
+
+            // Raycast culling for start and finish markers
+            raycaster.set(camera.position, startMarker.position.clone().sub(camera.position).normalize());
+            const startIntersects = raycaster.intersectObjects(wallMeshes);
+            startMarker.visible = startIntersects.length === 0 || startIntersects[0].distance > camera.position.distanceTo(startMarker.position);
+
+            raycaster.set(camera.position, finishMarker.position.clone().sub(camera.position).normalize());
+            const finishIntersects = raycaster.intersectObjects(wallMeshes);
+            finishMarker.visible = finishIntersects.length === 0 || finishIntersects[0].distance > camera.position.distanceTo(finishMarker.position);
+
+            const startX = camera.position.x;
+            const startZ = camera.position.z;
+            pointLight.position.set(startX, 2, startZ);
+
+            if (path && pathIndex < path.length) {
+                const targetGrid = path[pathIndex];
+                const targetX = targetGrid.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
+                const targetZ = targetGrid.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
+                const direction = new THREE.Vector3(targetX - camera.position.x, 0, targetZ - camera.position.z).normalize();
+
+                const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(
+                    new THREE.Vector3(0, 0, -1),
+                    direction
+                );
+                camera.quaternion.slerp(targetQuaternion, rotationLerpSpeed);
+
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                const moveStep = forward.multiplyScalar(pathSpeed * 0.05);
+                let newPosition = camera.position.clone().add(moveStep);
+
+                raycaster.set(camera.position, forward);
+                const intersects = raycaster.intersectObjects(wallMeshes);
+
+                if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.2) {
+                    const hitPoint = intersects[0].point;
+                    const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                    const safeDistance = wallThickness + 0.2;
+                    newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
+                }
+
+                camera.position.copy(newPosition);
+
+                if (camera.position.distanceTo(new THREE.Vector3(targetX, camera.position.y, targetZ)) < 0.1) {
+                    pathIndex++;
+                }
+            } else {
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                const targetVelocity = new THREE.Vector3();
+
+                if (moveForward) targetVelocity.add(forward.clone().multiplyScalar(maxSpeed));
+                if (moveBackward) targetVelocity.add(forward.clone().multiplyScalar(-maxSpeed));
+                if (moveLeft) targetVelocity.add(right.clone().multiplyScalar(-maxSpeed));
+                if (moveRight) targetVelocity.add(right.clone().multiplyScalar(maxSpeed));
+
+                velocity.lerp(targetVelocity, acceleration);
+                if (targetVelocity.length() === 0) velocity.multiplyScalar(1 - friction);
+
+                const moveDir = velocity.clone().normalize();
+                const moveDistance = velocity.length() * 0.1;
+                let newPosition = camera.position.clone();
+                let isColliding = false;
+
+                if (moveDistance > 0) {
+                    raycaster.set(camera.position, moveDir);
+                    const intersects = raycaster.intersectObjects(wallMeshes);
+
+                    if (intersects.length > 0 && intersects[0].distance <= moveDistance + wallThickness + 0.2) {
+                        const hitPoint = intersects[0].point;
+                        const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                        const safeDistance = wallThickness + 0.2;
+                        newPosition = hitPoint.clone().sub(moveDir.clone().multiplyScalar(safeDistance));
+                        velocity.projectOnPlane(normal);
+                        velocity.multiplyScalar(1 - wallFriction);
+                        isColliding = true;
+                    } else {
+                        newPosition.add(velocity.clone().multiplyScalar(0.1));
+                    }
+
+                    newPosition.x = Math.max(-mazeWidth * cellSize / 2 + wallThickness / 2, Math.min(mazeWidth * cellSize / 2 - wallThickness / 2, newPosition.x));
+                    newPosition.z = Math.max(-mazeHeight * cellSize / 2 + wallThickness / 2, Math.min(mazeHeight * cellSize / 2 - wallThickness / 2, newPosition.z));
+                }
+
+                camera.position.copy(newPosition);
+                if (!isColliding && velocity.length() < 0.01) velocity.set(0, 0, 0);
+            }
+
+            const distanceToFinish = camera.position.distanceTo(finishMarker.position);
+            if (distanceToFinish < 0.5) {
+                showAchievement();
+            } else if (distanceToFinish < 2) {
+                finishMarker.scale.lerp(new THREE.Vector3(1.2, 1.2, 1.2), 0.1);
+            } else {
+                finishMarker.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+            }
+
+            updateUI();
+            renderer.render(scene, camera);
+        }
+
+        setupMenu();
+        showMenu();
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            setupTouchZones();
+        });
+    </script>
+</body>
+</html>
