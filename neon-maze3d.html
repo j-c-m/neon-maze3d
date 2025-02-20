@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.28 (UUID: p8q7r6s5-u4t3-2v1w-x0y9-z8a7b6c5d4)</title>
+    <title>3D Neon Maze - v3.29 (UUID: q9r8s7t6-v5u4-3w2x-y1z0-a9b8c7d6e5)</title>
     <style>
         body {
             margin: 0;
@@ -163,8 +163,11 @@
          * Version 3.28 (UUID: p8q7r6s5-u4t3-2v1w-x0y9-z8a7b6c5d4)
          * - Updated wall culling to use raycasting, matching visibility rules of start and finish spheres
          *
+         * Version 3.29 (UUID: q9r8s7t6-v5u4-3w2x-y1z0-a9b8c7d6e5)
+         * - Removed 30x30 maze size option from menu to improve performance, retaining 10x10 and 20x20
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.28 -> 3.29) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.29 -> 3.30) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -188,8 +191,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.28:
-        // git commit -m "Version 3.28: Updated wall culling to use raycasting, matching visibility rules of start and finish spheres (UUID: p8q7r6s5-u4t3-2v1w-x0y9-z8a7b6c5d4)"
+        // Git Commit Command for Version 3.29:
+        // git commit -m "Version 3.29: Removed 30x30 maze size option from menu to improve performance, retaining 10x10 and 20x20 (UUID: q9r8s7t6-v5u4-3w2x-y1z0-a9b8c7d6e5)"
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -491,7 +494,7 @@
         const quitButton = document.getElementById('quitButton');
 
         function setupMenu() {
-            const sizes = [10, 20, 30];
+            const sizes = [10, 20]; // Removed 30x30
             sizes.forEach(size => {
                 const btn = document.createElement('div');
                 btn.className = 'menu-button';
