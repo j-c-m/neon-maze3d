@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.32 (UUID: u2v1w0x9-y8z7-6a5b-c4d3-e2f1g0h9i8)</title>
+    <title>3D Neon Maze - v3.33 (UUID: v3w2x1y0-z9a8-7b6c-d5e4-f3g2h1i0j9)</title>
     <style>
         body {
             margin: 0;
@@ -177,8 +177,11 @@
          * - Merged continuous wall sections into single meshes for performance (reinstating and fixing v3.18 concept)
          * - Updated culling and collision logic to handle merged walls correctly
          *
+         * Version 3.33 (UUID: v3w2x1y0-z9a8-7b6c-d5e4-f3g2h1i0j9)
+         * - Fixed culling to show entire merged wall section if any portion is visible, using raycasts to both endpoints
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.32 -> 3.33) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.33 -> 3.34) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -201,8 +204,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.32:
-        // git commit -m "Version 3.32: Merged continuous wall sections into single meshes for performance, updated culling and collision logic to handle merged walls (UUID: u2v1w0x9-y8z7-6a5b-c4d3-e2f1g0h9i8)" neon-maze3d.html
+        // Git Commit Command for Version 3.33:
+        // git commit -m "Version 3.33: Fixed culling to show entire merged wall section if any portion is visible, using raycasts to both endpoints (UUID: v3w2x1y0-z9a8-7b6c-d5e4-f3g2h1i0j9)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -218,7 +221,7 @@
         let gameActive = false, startTime, score = 0;
         let start = { x: 0, z: 0 }, finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
         let path = null, pathIndex = 0, pathMarkers = [];
-        let fogActive = true; // Fog enabled by default
+        let fogActive = true;
 
         let pointLight;
 
@@ -733,12 +736,44 @@
 
             const wallMeshes = walls.map(w => w.mesh);
 
-            // Raycast culling for merged walls
+            // Raycast culling for merged walls, checking both endpoints
             walls.forEach(wall => {
-                const center = wall.mesh.position.clone();
-                raycaster.set(camera.position, center.sub(camera.position).normalize());
-                const intersects = raycaster.intersectObjects(wallMeshes);
-                wall.mesh.visible = intersects.length === 0 || intersects[0].object === wall.mesh;
+                let startPos, endPos;
+                if (wall.isVertical) {
+                    startPos = new THREE.Vector3(
+                        wall.x * cellSize - mazeWidth * cellSize / 2,
+                        0,
+                        wall.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2
+                    );
+                    endPos = new THREE.Vector3(
+                        startPos.x,
+                        0,
+                        (wall.z + wall.length - 1) * cellSize - mazeHeight * cellSize / 2 + cellSize / 2
+                    );
+                } else {
+                    startPos = new THREE.Vector3(
+                        wall.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2,
+                        0,
+                        wall.z * cellSize - mazeHeight * cellSize / 2
+                    );
+                    endPos = new THREE.Vector3(
+                        (wall.x + wall.length - 1) * cellSize - mazeWidth * cellSize / 2 + cellSize / 2,
+                        0,
+                        startPos.z
+                    );
+                }
+
+                // Check visibility from camera to both endpoints
+                raycaster.set(camera.position, startPos.clone().sub(camera.position).normalize());
+                const startIntersects = raycaster.intersectObjects(wallMeshes);
+                const startVisible = startIntersects.length === 0 || startIntersects[0].object === wall.mesh;
+
+                raycaster.set(camera.position, endPos.clone().sub(camera.position).normalize());
+                const endIntersects = raycaster.intersectObjects(wallMeshes);
+                const endVisible = endIntersects.length === 0 || endIntersects[0].object === wall.mesh;
+
+                // Show the wall if either endpoint is visible
+                wall.mesh.visible = startVisible || endVisible;
             });
 
             floor.visible = true;
@@ -777,7 +812,7 @@
 
                 if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.2) {
                     const hitPoint = intersects[0].point;
-                    const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                    const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
                     const safeDistance = wallThickness + 0.2;
                     newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
                 }
@@ -811,7 +846,7 @@
 
                     if (intersects.length > 0 && intersects[0].distance <= moveDistance + wallThickness + 0.2) {
                         const hitPoint = intersects[0].point;
-                        const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                        const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
                         const safeDistance = wallThickness + 0.2;
                         newPosition = hitPoint.clone().sub(moveDir.clone().multiplyScalar(safeDistance));
                         velocity.projectOnPlane(normal);
