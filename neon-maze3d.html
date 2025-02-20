@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.30 (UUID: r0s9t8u7-v6w5-4x3y-z2a1-b0c9d8e7f6)</title>
+    <title>3D Neon Maze - v3.31 (UUID: t1u0v9w8-x7y6-5z4a-b3c2-d1e0f9g8h7)</title>
     <style>
         body {
             margin: 0;
@@ -170,8 +170,11 @@
          * - Added toggleable fog effect with 'F' key (default off) to limit visibility and enhance neon atmosphere
          * - Fog parameters: near=1, far=4, color matches floor/ceiling for cohesion
          *
+         * Version 3.31 (UUID: t1u0v9w8-x7y6-5z4a-b3c2-d1e0f9g8h7)
+         * - Enabled fog by default (fogActive = true), still toggleable with 'F' key
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.29 -> 3.30) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.31 -> 3.32) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -194,8 +197,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.30:
-        // git commit -m "Version 3.30: Added toggleable fog effect with 'F' key (default off) to limit visibility and enhance neon atmosphere (UUID: r0s9t8u7-v6w5-4x3y-z2a1-b0c9d8e7f6)" neon-maze3d.html
+        // Git Commit Command for Version 3.31:
+        // git commit -m "Version 3.31: Enabled fog by default (fogActive = true), still toggleable with 'F' key (UUID: t1u0v9w8-x7y6-5z4a-b3c2-d1e0f9g8h7)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -211,7 +214,7 @@
         let gameActive = false, startTime, score = 0;
         let start = { x: 0, z: 0 }, finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
         let path = null, pathIndex = 0, pathMarkers = [];
-        let fogActive = false; // Fog toggle state
+        let fogActive = true; // Fog enabled by default
 
         let pointLight;
 
@@ -353,8 +356,8 @@
             pointLight.position.set(startX, 2, startZ);
             scene.add(pointLight);
 
-            // Initialize fog (off by default)
-            scene.fog = null; // Will be set when toggled on
+            // Initialize fog (on by default)
+            scene.fog = null; // Will be set by updateFog
             updateFog(floorCeilingColor);
 
             camera.position.set(startX, 0.1, startZ);
@@ -749,7 +752,7 @@
 
                 if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.2) {
                     const hitPoint = intersects[0].point;
-                    const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                    const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
                     const safeDistance = wallThickness + 0.2;
                     newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
                 }
