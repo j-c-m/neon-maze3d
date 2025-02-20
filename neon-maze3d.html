@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.36 (UUID: x6y5z4a3-b2c1-8d7e-f6g5-h4i3j2k1l0)</title>
+    <title>3D Neon Maze - v3.37 (UUID: y7z6a5b4-c3d2-9e8f-g7h6-i5j4k3l2m1)</title>
     <style>
         body {
             margin: 0;
@@ -190,8 +190,11 @@
          * Version 3.36 (UUID: x6y5z4a3-b2c1-8d7e-f6g5-h4i3j2k1l0)
          * - Overhauled wall sliding to emulate modern FPS: removed wall friction, project movement onto wall plane, use multi-raycasting based on input for seamless sliding
          *
+         * Version 3.37 (UUID: y7z6a5b4-c3d2-9e8f-g7h6-i5j4k3l2m1)
+         * - Fixed wall clipping at joins: expanded raycast coverage with additional angles, added preemptive position sweep, increased safeDistance to 0.25
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.36 -> 3.37) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.37 -> 3.38) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -202,7 +205,7 @@
          * - pathSpeed (0.4): Controls auto-pathfinding speed; adjust between 0.1-1.0 for desired pace (current 0.4 is moderate).
          * - rotationLerpSpeed (0.1): Controls camera rotation speed during pathfinding; 0.05-0.5 range for smooth adjustments.
          * - wallThickness (0.01): Minimum visible thickness; avoid <0.01 to prevent rendering issues.
-         * - safeDistance (wallThickness + 0.2): Collision buffer; tweak 0.2 for larger/smaller wall boundaries.
+         * - safeDistance (wallThickness + 0.25): Collision buffer; tweak 0.25 for larger/smaller wall boundaries.
          * - To debug pathfinding: Log 'path' variable or toggle path markers with 'P'.
          *
          * TODO - Ideas for Future Changes:
@@ -214,8 +217,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.36:
-        // git commit -m "Version 3.36: Overhauled wall sliding to emulate modern FPS with zero friction, input-based multi-raycasting, and plane projection for seamless movement (UUID: x6y5z4a3-b2c1-8d7e-f6g5-h4i3j2k1l0)" neon-maze3d.html
+        // Git Commit Command for Version 3.37:
+        // git commit -m "Version 3.37: Fixed wall clipping at joins with expanded raycast coverage, preemptive position sweep, and increased safeDistance to 0.25 (UUID: y7z6a5b4-c3d2-9e8f-g7h6-i5j4k3l2m1)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -406,7 +409,7 @@
         const maxSpeed = 0.8,
               acceleration = 0.1,
               friction = 0.15,
-              wallFriction = 0, // Set to 0 for FPS-style sliding
+              wallFriction = 0,
               rotationSpeed = 0.002,
               pathSpeed = 0.4,
               rotationLerpSpeed = 0.1;
@@ -808,10 +811,10 @@
                 raycaster.set(camera.position, forward);
                 const intersects = raycaster.intersectObjects(wallMeshes);
 
-                if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.2) {
+                if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.25) {
                     const hitPoint = intersects[0].point;
                     const normal = intersects[0].face.normal.clone().applyQuaternion(interacts[0].object.quaternion);
-                    const safeDistance = wallThickness + 0.2;
+                    const safeDistance = wallThickness + 0.25;
                     newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
                 }
 
@@ -843,26 +846,27 @@
                 let newPosition = camera.position.clone();
 
                 if (moveStep.length() > 0) {
-                    // Multi-raycast based on input directions
-                    const checkDirections = [];
-                    if (moveForward) checkDirections.push(forward);
-                    if (moveBackward) checkDirections.push(forward.clone().negate());
-                    if (moveLeft) checkDirections.push(right.clone().negate());
-                    if (moveRight) checkDirections.push(right);
-                    if (moveForward && moveRight) checkDirections.push(forward.clone().add(right).normalize());
-                    if (moveForward && moveLeft) checkDirections.push(forward.clone().sub(right).normalize());
-                    if (moveBackward && moveRight) checkDirections.push(forward.clone().negate().add(right).normalize());
-                    if (moveBackward && moveLeft) checkDirections.push(forward.clone().negate().sub(right).normalize());
+                    // Expanded multi-raycast coverage
+                    const checkDirections = [
+                        forward,
+                        forward.clone().negate(),
+                        right,
+                        right.clone().negate(),
+                        forward.clone().add(right).normalize(),           // 45° forward-right
+                        forward.clone().sub(right).normalize(),           // 45° forward-left
+                        forward.clone().negate().add(right).normalize(),  // 45° backward-right
+                        forward.clone().negate().sub(right).normalize()   // 45° backward-left
+                    ];
 
                     let finalMove = moveStep.clone();
-                    const safeDistance = wallThickness + 0.2;
+                    const safeDistance = wallThickness + 0.25; // Increased from 0.2 to 0.25
 
+                    // Apply sliding based on raycasts
                     for (const dir of checkDirections) {
-                        raycaster.set(newPosition, dir);
+                        raycaster.set(camera.position, dir);
                         const intersects = raycaster.intersectObjects(wallMeshes);
                         if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + safeDistance) {
                             const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
-                            // Project the movement onto the wall plane
                             const moveDotNormal = finalMove.dot(normal);
                             if (moveDotNormal < 0) {
                                 finalMove.sub(normal.clone().multiplyScalar(moveDotNormal));
@@ -871,6 +875,23 @@
                     }
 
                     newPosition.add(finalMove);
+
+                    // Preemptive position sweep to prevent clipping at joins
+                    const sweepDirections = [
+                        new THREE.Vector3(1, 0, 0),
+                        new THREE.Vector3(-1, 0, 0),
+                        new THREE.Vector3(0, 0, 1),
+                        new THREE.Vector3(0, 0, -1)
+                    ];
+                    for (const dir of sweepDirections) {
+                        raycaster.set(newPosition, dir);
+                        const intersects = raycaster.intersectObjects(wallMeshes);
+                        if (intersects.length > 0 && intersects[0].distance < safeDistance) {
+                            const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                            const correction = normal.clone().multiplyScalar(safeDistance - intersects[0].distance);
+                            newPosition.add(correction);
+                        }
+                    }
 
                     // Clamp position to maze boundaries
                     newPosition.x = Math.max(-mazeWidth * cellSize / 2 + safeDistance, Math.min(mazeWidth * cellSize / 2 - safeDistance, newPosition.x));
