@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.33 (UUID: v3w2x1y0-z9a8-7b6c-d5e4-f3g2h1i0j9)</title>
+    <title>3D Neon Maze - v3.34 (UUID: w4x3y2z1-a0b9-8c7d-e6f5-g4h3i2j1k0)</title>
     <style>
         body {
             margin: 0;
@@ -180,8 +180,11 @@
          * Version 3.33 (UUID: v3w2x1y0-z9a8-7b6c-d5e4-f3g2h1i0j9)
          * - Fixed culling to show entire merged wall section if any portion is visible, using raycasts to both endpoints
          *
+         * Version 3.34 (UUID: w4x3y2z1-a0b9-8c7d-e6f5-g4h3i2j1k0)
+         * - Enhanced culling to raycast at every cell along merged walls, ensuring visibility if any part is unobstructed
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.33 -> 3.34) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.34 -> 3.35) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -204,8 +207,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.33:
-        // git commit -m "Version 3.33: Fixed culling to show entire merged wall section if any portion is visible, using raycasts to both endpoints (UUID: v3w2x1y0-z9a8-7b6c-d5e4-f3g2h1i0j9)" neon-maze3d.html
+        // Git Commit Command for Version 3.34:
+        // git commit -m "Version 3.34: Enhanced culling to raycast at every cell along merged walls, ensuring visibility if any part is unobstructed (UUID: w4x3y2z1-a0b9-8c7d-e6f5-g4h3i2j1k0)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -736,44 +739,32 @@
 
             const wallMeshes = walls.map(w => w.mesh);
 
-            // Raycast culling for merged walls, checking both endpoints
+            // Raycast culling for merged walls, checking every cell along the length
             walls.forEach(wall => {
-                let startPos, endPos;
-                if (wall.isVertical) {
-                    startPos = new THREE.Vector3(
-                        wall.x * cellSize - mazeWidth * cellSize / 2,
-                        0,
-                        wall.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2
-                    );
-                    endPos = new THREE.Vector3(
-                        startPos.x,
-                        0,
-                        (wall.z + wall.length - 1) * cellSize - mazeHeight * cellSize / 2 + cellSize / 2
-                    );
-                } else {
-                    startPos = new THREE.Vector3(
-                        wall.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2,
-                        0,
-                        wall.z * cellSize - mazeHeight * cellSize / 2
-                    );
-                    endPos = new THREE.Vector3(
-                        (wall.x + wall.length - 1) * cellSize - mazeWidth * cellSize / 2 + cellSize / 2,
-                        0,
-                        startPos.z
-                    );
+                let isVisible = false;
+                for (let i = 0; i < wall.length && !isVisible; i++) {
+                    let checkPos;
+                    if (wall.isVertical) {
+                        checkPos = new THREE.Vector3(
+                            wall.x * cellSize - mazeWidth * cellSize / 2,
+                            0,
+                            (wall.z + i) * cellSize - mazeHeight * cellSize / 2 + cellSize / 2
+                        );
+                    } else {
+                        checkPos = new THREE.Vector3(
+                            (wall.x + i) * cellSize - mazeWidth * cellSize / 2 + cellSize / 2,
+                            0,
+                            wall.z * cellSize - mazeHeight * cellSize / 2
+                        );
+                    }
+
+                    raycaster.set(camera.position, checkPos.clone().sub(camera.position).normalize());
+                    const intersects = raycaster.intersectObjects(wallMeshes);
+                    if (intersects.length === 0 || intersects[0].object === wall.mesh) {
+                        isVisible = true;
+                    }
                 }
-
-                // Check visibility from camera to both endpoints
-                raycaster.set(camera.position, startPos.clone().sub(camera.position).normalize());
-                const startIntersects = raycaster.intersectObjects(wallMeshes);
-                const startVisible = startIntersects.length === 0 || startIntersects[0].object === wall.mesh;
-
-                raycaster.set(camera.position, endPos.clone().sub(camera.position).normalize());
-                const endIntersects = raycaster.intersectObjects(wallMeshes);
-                const endVisible = endIntersects.length === 0 || endIntersects[0].object === wall.mesh;
-
-                // Show the wall if either endpoint is visible
-                wall.mesh.visible = startVisible || endVisible;
+                wall.mesh.visible = isVisible;
             });
 
             floor.visible = true;
