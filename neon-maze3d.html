@@ -238,6 +238,7 @@
         let start = { x: 0, z: 0 }, finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
         let path = null, pathIndex = 0, pathMarkers = [];
         let fogActive = true;
+        let fogColor = 0x111111;
 
         let pointLight;
 
@@ -307,7 +308,7 @@
                         const material = new THREE.MeshPhongMaterial({
                             color: isBoundary ? boundaryColor : wallColor,
                             opacity: 0.5,
-                            transparent: true,
+                            transparent: false,
                             side: THREE.DoubleSide,
                             shininess: 30
                         });
@@ -338,7 +339,7 @@
                         const material = new THREE.MeshPhongMaterial({
                             color: isBoundary ? boundaryColor : wallColor,
                             opacity: 0.5,
-                            transparent: true,
+                            transparent: false,
                             side: THREE.DoubleSide,
                             shininess: 30
                         });
@@ -359,7 +360,7 @@
             const floorMaterial = new THREE.MeshPhongMaterial({
                 color: floorCeilingColor,
                 opacity: 0.3,
-                transparent: true,
+                transparent: false,
                 side: THREE.DoubleSide,
                 shininess: 10
             });
@@ -371,7 +372,7 @@
             const ceilingMaterial = new THREE.MeshPhongMaterial({
                 color: floorCeilingColor,
                 opacity: 0.3,
-                transparent: true,
+                transparent: false,
                 side: THREE.DoubleSide,
                 shininess: 10
             });
@@ -402,7 +403,7 @@
             scene.add(pointLight);
 
             scene.fog = null;
-            updateFog(floorCeilingColor);
+            updateFog(fogColor);
 
             camera.position.set(startX, 0.1, startZ);
             gameActive = true;
@@ -526,7 +527,7 @@
                         break;
                     case 'f':
                         fogActive = !fogActive;
-                        updateFog(floor.material.color.getHex());
+                        updateFog(fogColor);
                         break;
                 }
             } else if (e.key === ' ' && achievementElement.style.display === 'block') {
@@ -648,7 +649,7 @@
 
         function updateFog(color) {
             if (fogActive) {
-                scene.fog = new THREE.Fog(color, 1, 4);
+                scene.fog = new THREE.Fog(color, 0, 5);
             } else {
                 scene.fog = null;
             }
