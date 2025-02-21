@@ -197,7 +197,7 @@
          * - Increased pathSpeed from 0.4 to 0.8 to match maxSpeed for faster auto-pathfinding
          *
          * Version 3.39 (UUID: b9c8d7e6-f5g4-3h2i-j1k0-l9m8n7o6p5)
-         * - Optimized for larger maze sizes: only render objects within a 5-cell visibility radius around the player, destroying those outside, replacing full maze rendering and visibility toggling
+         * - Optimized for larger maze sizes: only render objects within a 10-cell visibility radius around the player, destroying those outside, replacing full maze rendering and visibility toggling
          *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 3.38 -> 3.39) in the <title> and changelog.
@@ -299,21 +299,21 @@
             // Cache materials
             wallMaterials.wall = new THREE.MeshPhongMaterial({
                 color: wallColor,
-                opacity: 0.5,
+                opacity: 1.0,
                 transparent: false,
                 side: THREE.DoubleSide,
                 shininess: 30
             });
             wallMaterials.boundary = new THREE.MeshPhongMaterial({
                 color: boundaryColor,
-                opacity: 0.5,
+                opacity: 1.0,
                 transparent: false,
                 side: THREE.DoubleSide,
                 shininess: 30
             });
             wallMaterials.floorCeiling = new THREE.MeshPhongMaterial({
                 color: floorCeilingColor,
-                opacity: 0.3,
+                opacity: 1.0,
                 transparent: false,
                 side: THREE.DoubleSide,
                 shininess: 10
@@ -348,7 +348,7 @@
             finishMarker.position.set(finishX, 0, finishZ);
             scene.add(finishMarker);
 
-            const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
             pointLight = new THREE.PointLight(0xffffff, 0.8, 50);
             pointLight.position.set(startX, 2, startZ);
