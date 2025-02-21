@@ -242,7 +242,7 @@
         let path = null, pathIndex = 0, pathMarkers = [];
         let fogActive = true;
         let fogColor = 0x111111;
-        const visibilityRadius = 5; // Cells around player to render
+        const visibilityRadius = 10; // Cells around player to render
 
         let pointLight;
         let wallMaterials = {}; // Cache materials for reuse
@@ -675,7 +675,7 @@
 
         function updateFog(color) {
             if (fogActive) {
-                scene.fog = new THREE.Fog(color, 0, visibilityRadius * cellSize);
+                scene.fog = new THREE.Fog(color, 1, 5);
             } else {
                 scene.fog = null;
             }
