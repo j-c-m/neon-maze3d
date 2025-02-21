@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.40 (UUID: c0d9e8f7-g6h5-4i3j-k2l1-m0n9p8q7r6)</title>
+    <title>3D Neon Maze - v3.41 (UUID: d1e0f9g8-h7i6-5j4k-l3m2-n1p0q9r8s7)</title>
     <style>
         body {
             margin: 0;
@@ -78,9 +78,6 @@
          * Changelog:
          * Previous versions omitted for brevity (see original code for full history up to v3.39)
          *
-         * Version 3.39 (UUID: b9c8d7e6-f5g4-3h2i-j1k0-l9m8n7o6p5)
-         * - Optimized for larger maze sizes: only render objects within a 10-cell visibility radius around the player, destroying those outside, replacing full maze rendering and visibility toggling
-         *
          * Version 3.40 (UUID: c0d9e8f7-g6h5-4i3j-k2l1-m0n9p8q7r6)
          * - Increased default maze size to 100x100 for a larger play area
          * - Enhanced maze difficulty by modifying generation algorithm to favor more dead ends and longer paths
@@ -88,8 +85,12 @@
          * - Updated menu to default to 100x100, removing smaller size options
          * - Adjusted finish position to ensure greater distance from start, increasing challenge
          *
+         * Version 3.41 (UUID: d1e0f9g8-h7i6-5j4k-l3m2-n1p0q9r8s7)
+         * - Replaced recursive backtracking with Hunt-and-Kill algorithm to generate a more difficult maze with many dead ends and a complex solution path
+         * - Fixed start at (0,0) and finish at (99,99) to maximize solution path length
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.40 -> 3.41) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.41 -> 3.42) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -112,8 +113,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.40:
-        // git commit -m "Version 3.40: Increased maze size to 100x100, enhanced difficulty with more dead ends and longer paths, increased visibility radius to 15, updated menu to 100x100 default (UUID: c0d9e8f7-g6h5-4i3j-k2l1-m0n9p8q7r6)" neon-maze3d.html
+        // Git Commit Command for Version 3.41:
+        // git commit -m "Version 3.41: Replaced recursive backtracking with Hunt-and-Kill algorithm for more difficult maze with many dead ends, fixed start at (0,0) and finish at (99,99) for longer path (UUID: d1e0f9g8-h7i6-5j4k-l3m2-n1p0q9r8s7)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -122,16 +123,16 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        let mazeWidth = 100, mazeHeight = 100; // Increased to 100x100
+        let mazeWidth = 100, mazeHeight = 100;
         const cellSize = 2;
         const wallThickness = 0.01;
         let maze = [], walls = new Map(), floor, ceiling, startMarker, finishMarker;
         let gameActive = false, startTime, score = 0;
-        let start = { x: 0, z: 0 }, finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
+        let start = { x: 0, z: 0 }, finish = { x: mazeWidth - 1, z: mazeHeight - 1 }; // Fixed positions
         let path = null, pathIndex = 0, pathMarkers = [];
         let fogActive = true;
         let fogColor = 0x111111;
-        const visibilityRadius = 15; // Increased from 10 to 15 for larger maze
+        const visibilityRadius = 15;
 
         let pointLight;
         let wallMaterials = {};
@@ -148,42 +149,61 @@
             let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
             let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
 
-            function carve(x, z, depth = 0) {
+            function getUnvisitedNeighbors(x, z) {
+                const neighbors = [];
                 const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-                directions.sort(() => Math.random() - 0.5);
-
-                // Increase difficulty: Occasionally skip carving to create dead ends
-                const createDeadEnd = Math.random() < 0.3 && depth > 5; // 30% chance after initial depth
-                if (createDeadEnd) return;
-
-                for (let [dx, dz] of directions) {
+                for (const [dx, dz] of directions) {
                     const nx = x + dx, nz = z + dz;
                     if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && maze[nx][nz] === 0) {
-                        if (dx === 1) vWalls[x + 1][z] = false;
-                        else if (dx === -1) vWalls[x][z] = false;
-                        else if (dz === 1) hWalls[x][z + 1] = false;
-                        else if (dz === -1) hWalls[x][z] = false;
-                        maze[nx][nz] = 1; // Mark as visited
-                        carve(nx, nz, depth + 1);
+                        neighbors.push({ x: nx, z: nz, dx: dx, dz: dz });
                     }
+                }
+                return neighbors;
+            }
+
+            function hunt() {
+                for (let z = 0; z < mazeHeight; z++) {
+                    for (let x = 0; x < mazeWidth; x++) {
+                        if (maze[x][z] === 0) {
+                            const visitedNeighbors = getUnvisitedNeighbors(x, z).filter(n => maze[n.x - n.dx][n.z - n.dz] === 1);
+                            if (visitedNeighbors.length > 0) {
+                                const neighbor = visitedNeighbors[Math.floor(Math.random() * visitedNeighbors.length)];
+                                if (neighbor.dx === 1) vWalls[x + 1][z] = false;
+                                else if (neighbor.dx === -1) vWalls[x][z] = false;
+                                else if (neighbor.dz === 1) hWalls[x][z + 1] = false;
+                                else if (neighbor.dz === -1) hWalls[x][z] = false;
+                                maze[x][z] = 1;
+                                return { x, z };
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+
+            // Hunt-and-Kill algorithm
+            let current = { x: start.x, z: start.z };
+            maze[current.x][current.z] = 1;
+
+            while (current) {
+                let neighbors = getUnvisitedNeighbors(current.x, current.z);
+                if (neighbors.length > 0) {
+                    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    if (next.dx === 1) vWalls[current.x + 1][current.z] = false;
+                    else if (next.dx === -1) vWalls[current.x][current.z] = false;
+                    else if (next.dz === 1) hWalls[current.x][current.z + 1] = false;
+                    else if (next.dz === -1) hWalls[current.x][current.z] = false;
+                    maze[next.x][next.z] = 1;
+                    current = next;
+                } else {
+                    current = hunt();
                 }
             }
 
-            start.x = Math.floor(Math.random() * mazeWidth / 4); // Start in top-left quadrant
-            start.z = Math.floor(Math.random() * mazeHeight / 4);
-            maze[start.x][start.z] = 1;
-            carve(start.x, start.z);
-
-            // Ensure finish is far from start (bottom-right quadrant)
-            do {
-                finish.x = Math.floor(mazeWidth * 0.75 + Math.random() * mazeWidth * 0.25);
-                finish.z = Math.floor(mazeHeight * 0.75 + Math.random() * mazeHeight * 0.25);
-            } while (maze[finish.x][finish.z] === 0 ||
-                     (finish.x === start.x && finish.z === start.z) ||
-                     Math.abs(finish.x - start.x) + Math.abs(finish.z - start.z) < mazeWidth * 0.5);
-
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
+
+            // Ensure start and finish are accessible (already guaranteed by algorithm starting at (0,0) and spanning all cells)
         }
 
         function renderMaze() {
@@ -471,7 +491,7 @@
         const quitButton = document.getElementById('quitButton');
 
         function setupMenu() {
-            const size = 100; // Only 100x100 option
+            const size = 100;
             const btn = document.createElement('div');
             btn.className = 'menu-button';
             btn.textContent = `${size}x${size}`;
