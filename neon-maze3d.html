@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.42 (UUID: e2f1g0h9-i8j7-6k5l-m4n3-p2q1r0s9t8)</title>
+    <title>3D Neon Maze - v3.43 (UUID: f3g2h1i0-j9k8-7l6m-n5p4-q3r2s1t0u9)</title>
     <style>
         body {
             margin: 0;
@@ -78,17 +78,18 @@
          * Changelog:
          * Previous versions omitted for brevity (see original code for full history up to v3.39)
          *
-         * Version 3.41 (UUID: d1e0f9g8-h7i6-5j4k-l3m2-n1p0q9r8s7)
-         * - Replaced recursive backtracking with Hunt-and-Kill algorithm to generate a more difficult maze with many dead ends and a complex solution path
-         * - Fixed start at (0,0) and finish at (99,99) to maximize solution path length
-         *
          * Version 3.42 (UUID: e2f1g0h9-i8j7-6k5l-m4n3-p2q1r0s9t8)
          * - Fixed Hunt-and-Kill algorithm to ensure all cells are visited and start (0,0) is connected to finish (99,99)
          * - Added connectivity validation using flood-fill; falls back to recursive backtracking if maze is impossible
          * - Maintained high dead-end density for difficulty
          *
+         * Version 3.43 (UUID: f3g2h1i0-j9k8-7l6m-n5p4-q3r2s1t0u9)
+         * - Replaced Hunt-and-Kill with Recursive Division algorithm for a more difficult maze with long corridors and dead ends
+         * - Ensured solvability with single passages per division, kept start at (0,0) and finish at (99,99)
+         * - Removed connectivity validation as Recursive Division guarantees a solvable maze
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.42 -> 3.43) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.43 -> 3.44) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function or manually create a unique 36-character string (e.g., xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx) and update in <title> and changelog.
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
@@ -111,8 +112,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.42:
-        // git commit -m "Version 3.42: Fixed Hunt-and-Kill algorithm to ensure connectivity between start (0,0) and finish (99,99), added validation with flood-fill and fallback to recursive backtracking (UUID: e2f1g0h9-i8j7-6k5l-m4n3-p2q1r0s9t8)" neon-maze3d.html
+        // Git Commit Command for Version 3.43:
+        // git commit -m "Version 3.43: Replaced Hunt-and-Kill with Recursive Division algorithm for a difficult maze with long corridors and dead ends, ensured solvability with single passages (UUID: f3g2h1i0-j9k8-7l6m-n5p4-q3r2s1t0u9)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -140,144 +141,61 @@
             for (let x = 0; x < mazeWidth; x++) {
                 maze[x] = [];
                 for (let z = 0; z < mazeHeight; z++) {
-                    maze[x][z] = 0; // 0 = unvisited
+                    maze[x][z] = 1; // 1 = visited (open space)
                 }
             }
 
-            let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
-            let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
+            let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(false));
+            let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(false));
 
-            function getUnvisitedNeighbors(x, z) {
-                const neighbors = [];
-                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-                for (const [dx, dz] of directions) {
-                    const nx = x + dx, nz = z + dz;
-                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && maze[nx][nz] === 0) {
-                        neighbors.push({ x: nx, z: nz, dx: dx, dz: dz });
-                    }
-                }
-                return neighbors;
+            // Set boundary walls
+            for (let z = 0; z < mazeHeight; z++) {
+                vWalls[0][z] = true;
+                vWalls[mazeWidth][z] = true;
             }
-
-            function hunt() {
-                for (let z = 0; z < mazeHeight; z++) {
-                    for (let x = 0; x < mazeWidth; x++) {
-                        if (maze[x][z] === 0) {
-                            const visitedNeighbors = [];
-                            const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-                            for (const [dx, dz] of directions) {
-                                const nx = x + dx, nz = z + dz;
-                                if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && maze[nx][nz] === 1) {
-                                    visitedNeighbors.push({ x: nx, z: nz, dx: -dx, dz: -dz });
-                                }
-                            }
-                            if (visitedNeighbors.length > 0) {
-                                const neighbor = visitedNeighbors[Math.floor(Math.random() * visitedNeighbors.length)];
-                                if (neighbor.dx === 1) vWalls[x + 1][z] = false;
-                                else if (neighbor.dx === -1) vWalls[x][z] = false;
-                                else if (neighbor.dz === 1) hWalls[x][z + 1] = false;
-                                else if (neighbor.dz === -1) hWalls[x][z] = false;
-                                maze[x][z] = 1;
-                                return { x, z };
-                            }
-                        }
-                    }
-                }
-                return null;
-            }
-
-            // Hunt-and-Kill algorithm
-            let current = { x: start.x, z: start.z };
-            maze[current.x][current.z] = 1;
-
-            while (current) {
-                let neighbors = getUnvisitedNeighbors(current.x, current.z);
-                if (neighbors.length > 0) {
-                    const next = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    if (next.dx === 1) vWalls[current.x + 1][current.z] = false;
-                    else if (next.dx === -1) vWalls[current.x][current.z] = false;
-                    else if (next.dz === 1) hWalls[current.x][current.z + 1] = false;
-                    else if (next.dz === -1) hWalls[current.x][current.z] = false;
-                    maze[next.x][next.z] = 1;
-                    current = next;
-                } else {
-                    current = hunt();
-                }
-            }
-
-            maze.vWalls = vWalls;
-            maze.hWalls = hWalls;
-
-            // Validate connectivity
-            if (!isConnected(start, finish)) {
-                console.warn("Hunt-and-Kill generated an impossible maze; falling back to recursive backtracking.");
-                generateMazeFallback();
-            }
-        }
-
-        function generateMazeFallback() {
-            // Recursive backtracking as a fallback
-            maze = [];
             for (let x = 0; x < mazeWidth; x++) {
-                maze[x] = [];
-                for (let z = 0; z < mazeHeight; z++) {
-                    maze[x][z] = 0;
-                }
+                hWalls[x][0] = true;
+                hWalls[x][mazeHeight] = true;
             }
 
-            let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
-            let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
+            function divide(x, z, width, height) {
+                if (width < 2 || height < 2) return; // Stop if too small to divide
 
-            function carve(x, z) {
-                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-                directions.sort(() => Math.random() - 0.5);
+                const horizontal = width > height; // Prefer splitting the longer dimension
+                let wallPos, passagePos;
 
-                for (let [dx, dz] of directions) {
-                    const nx = x + dx, nz = z + dz;
-                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && maze[nx][nz] === 0) {
-                        if (dx === 1) vWalls[x + 1][z] = false;
-                        else if (dx === -1) vWalls[x][z] = false;
-                        else if (dz === 1) hWalls[x][z + 1] = false;
-                        else if (dz === -1) hWalls[x][z] = false;
-                        maze[nx][nz] = 1;
-                        carve(nx, nz);
+                if (horizontal) {
+                    // Horizontal division (vertical wall)
+                    wallPos = x + Math.floor(Math.random() * (width - 1)) + 1; // Random x position for wall
+                    passagePos = z + Math.floor(Math.random() * height); // Random z position for passage
+                    for (let i = z; i < z + height; i++) {
+                        vWalls[wallPos][i] = true;
                     }
+                    vWalls[wallPos][passagePos] = false; // Create passage
+
+                    // Recursively divide left and right sections
+                    divide(x, z, wallPos - x, height);
+                    divide(wallPos, z, x + width - wallPos, height);
+                } else {
+                    // Vertical division (horizontal wall)
+                    wallPos = z + Math.floor(Math.random() * (height - 1)) + 1; // Random z position for wall
+                    passagePos = x + Math.floor(Math.random() * width); // Random x position for passage
+                    for (let i = x; i < x + width; i++) {
+                        hWalls[i][wallPos] = true;
+                    }
+                    hWalls[passagePos][wallPos] = false; // Create passage
+
+                    // Recursively divide top and bottom sections
+                    divide(x, z, width, wallPos - z);
+                    divide(x, wallPos, width, z + height - wallPos);
                 }
             }
 
-            maze[start.x][start.z] = 1;
-            carve(start.x, start.z);
-            maze[finish.x][finish.z] = 1; // Ensure finish is marked visited
+            // Start division from the full maze
+            divide(0, 0, mazeWidth, mazeHeight);
 
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
-        }
-
-        function isConnected(start, finish) {
-            // Flood-fill to check if start can reach finish
-            const visited = new Set();
-            const stack = [start];
-
-            while (stack.length > 0) {
-                const { x, z } = stack.pop();
-                const key = `${x},${z}`;
-                if (visited.has(key)) continue;
-                visited.add(key);
-
-                if (x === finish.x && z === finish.z) return true;
-
-                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-                for (const [dx, dz] of directions) {
-                    const nx = x + dx, nz = z + dz;
-                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
-                        if (dx === 1 && !maze.vWalls[x + 1][z]) stack.push({ x: nx, z: nz });
-                        else if (dx === -1 && !maze.vWalls[x][z]) stack.push({ x: nx, z: nz });
-                        else if (dz === 1 && !maze.hWalls[x][z + 1]) stack.push({ x: nx, z: nz });
-                        else if (dz === -1 && !maze.hWalls[x][z]) stack.push({ x: nx, z: nz });
-                    }
-                }
-            }
-            return false;
         }
 
         function renderMaze() {
