@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.54</title>
+    <title>3D Neon Maze - v3.55</title>
     <style>
         body {
             margin: 0;
@@ -116,8 +116,11 @@
          * Version 3.54
          * - Adjusted maze size based on difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
          *
+         * Version 3.55
+         * - Adjust mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.54 -> 3.55) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.55 -> 3.56) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes") and include it below the changelog.
@@ -139,8 +142,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.54:
-        // git commit -m "Version 3.54: Adjusted maze size based on difficulty - Easy (50x50), Medium (75x75), Hard (100x100)" neon-maze3d.html
+        // Git Commit Command for Version 3.55:
+        // git commit -m "Version 3.55: Adjust mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -167,16 +170,16 @@
             // Set maze size based on difficulty
             switch (difficulty) {
                 case 1: // Easy
-                    mazeWidth = 50;
-                    mazeHeight = 50;
+                    mazeWidth = 25;
+                    mazeHeight = 25;
                     break;
                 case 2: // Medium
                     mazeWidth = 75;
                     mazeHeight = 75;
                     break;
                 case 3: // Hard
-                    mazeWidth = 100;
-                    mazeHeight = 100;
+                    mazeWidth = 350;
+                    mazeHeight = 350;
                     break;
             }
 
