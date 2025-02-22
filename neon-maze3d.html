@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.48 (UUID: 7b2e9d4f-3c1a-4e8d-9f5c-6a0b3e8d1c2f)</title>
+    <title>3D Neon Maze - v3.49 (UUID: 5d8f2c1b-4e3a-4c9d-8b6f-7a0e3d9c1f2e)</title>
     <style>
         body {
             margin: 0;
@@ -110,8 +110,11 @@
          * - Replaced Binary Tree with Kruskal’s algorithm for organic, winding corridors
          * - Difficulty controls connection probability (Easy: more connections, Medium: balanced, Hard: fewer connections)
          *
+         * Version 3.49 (UUID: 5d8f2c1b-4e3a-4c9d-8b6f-7a0e3d9c1f2e)
+         * - Removed unnecessary opening of start (0,0) and finish (99,99) walls in Kruskal’s, as player starts inside maze
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.48 -> 3.49) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.49 -> 3.50) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Include the last 10 most recent changes in the changelog.
@@ -134,8 +137,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.48:
-        // git commit -m "Version 3.48: Replaced Binary Tree with Kruskal’s algorithm for organic, winding corridors, difficulty controls connection probability (Easy: more connections, Medium: balanced, Hard: fewer connections) (UUID: 7b2e9d4f-3c1a-4e8d-9f5c-6a0b3e8d1c2f)" neon-maze3d.html
+        // Git Commit Command for Version 3.49:
+        // git commit -m "Version 3.49: Removed unnecessary opening of start and finish walls in Kruskal’s algorithm, as player starts inside maze (UUID: 5d8f2c1b-4e3a-4c9d-8b6f-7a0e3d9c1f2e)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -229,10 +232,7 @@
                 }
             }
 
-            // Ensure start (0,0) and finish (99,99) are accessible
-            vWalls[0][0] = false; // Open start (west wall)
-            hWalls[mazeWidth - 1][mazeHeight - 1] = false; // Open finish (south wall)
-
+            // No need to manually open start or finish walls, as player starts inside maze
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
         }
