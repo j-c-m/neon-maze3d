@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.01</title>
+    <title>3D Neon Maze - v4.0</title>
     <style>
         body {
             margin: 0;
@@ -65,7 +65,7 @@
     </style>
 </head>
 <body>
-    <div id="ui">Difficulty: Easy | Score: 0 | Time: 0s</div>
+    <div id="ui">Score: 0 | Time: 0s</div>
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
     <div id="menu"></div>
@@ -73,7 +73,6 @@
     <script>
         /*
          * Changelog:
-         * Version 4.01 - Added difficulty to UI display, replaced solid colors with neon wall/floor textures
          * Version 4.0  - Updated to major version 4.0 with no functional changes
          * Version 3.59 - Added configurable loops and increased dead-end paths in maze generation for higher difficulty
          * Version 3.58 - Rotated player to face an open direction (not a wall) at start, corrected yaw alignment
@@ -83,6 +82,7 @@
          * Version 3.54 - Adjusted maze size by difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
          * Version 3.53 - Ensured distinct wall/floor colors, added neon palette
          * Version 3.52 - Switched to iterative stack-based backtracking
+         * Version 3.51 - Replaced Kruskal’s with Recursive Backtracking
          *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 3.59 -> 3.60) in the <title> and changelog.
@@ -91,8 +91,8 @@
          * 4. Generate a Git commit command and include it below the changelog.
          * 5. Do not remove these instructions in future updates.
          *
-         * Git Commit Command for Version 4.01:
-         * git commit -m "Version 4.01: Added difficulty to UI display, replaced solid colors with neon wall/floor textures" neon-maze3d.html
+         * Git Commit Command for Version 4.0:
+         * git commit -m "Version 4.0: Updated to major version 4.0 with no functional changes" neon-maze3d.html
          */
 
         const scene = new THREE.Scene();
@@ -108,24 +108,24 @@
                 mazeHeight: 25,
                 fogDistance: 8,
                 directionBias: 0.7,
-                loopProbability: 0.05,
-                deadEndProbability: 0.1
+                loopProbability: 0.05,  // Low chance of loops
+                deadEndProbability: 0.1 // Few dead ends
             },
             medium: {
                 mazeWidth: 75,
                 mazeHeight: 75,
                 fogDistance: 6,
                 directionBias: 0.6,
-                loopProbability: 0.15,
-                deadEndProbability: 0.3
+                loopProbability: 0.15,  // Moderate loops
+                deadEndProbability: 0.3 // More dead ends
             },
             hard: {
                 mazeWidth: 350,
                 mazeHeight: 350,
                 fogDistance: 5,
                 directionBias: 0.4,
-                loopProbability: 0.25,
-                deadEndProbability: 0.5
+                loopProbability: 0.25,  // High chance of loops
+                deadEndProbability: 0.5 // Many dead ends
             }
         };
 
@@ -145,33 +145,6 @@
 
         let pointLight;
         let wallMaterials = {};
-
-        // Function to create a neon texture
-        function createNeonTexture(baseColor, glowColor) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-
-            // Create gradient for neon effect
-            const gradient = ctx.createLinearGradient(0, 0, 256, 256);
-            gradient.addColorStop(0, `#${baseColor.toString(16).padStart(6, '0')}`);
-            gradient.addColorStop(0.5, `#${glowColor.toString(16).padStart(6, '0')}`);
-            gradient.addColorStop(1, `#${baseColor.toString(16).padStart(6, '0')}`);
-
-            ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, 256, 256);
-
-            // Add some noise for texture
-            for (let i = 0; i < 500; i++) {
-                const x = Math.random() * 256;
-                const y = Math.random() * 256;
-                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.3})`;
-                ctx.fillRect(x, y, 2, 2);
-            }
-
-            return new THREE.CanvasTexture(canvas);
-        }
 
         function generateMaze() {
             mazeWidth = currentDifficulty.mazeWidth;
@@ -241,6 +214,7 @@
                     visited.add(`${nx},${nz}`);
                     stack.push({ x: nx, z: nz });
 
+                    // Add dead-end paths with probability
                     if (Math.random() < deadEndProbability && neighbors.length > 1) {
                         const extraDir = neighbors[Math.floor(Math.random() * (neighbors.length - 1))];
                         if (extraDir !== dir) {
@@ -261,14 +235,15 @@
                 }
             }
 
+            // Add loops by removing additional walls
             for (let x = 0; x < mazeWidth; x++) {
                 for (let z = 0; z < mazeHeight; z++) {
                     if (Math.random() < loopProbability) {
                         if (x < mazeWidth - 1 && Math.random() < 0.5) {
-                            vWalls[x + 1][z] = false;
+                            vWalls[x + 1][z] = false; // Remove vertical wall
                         }
                         if (z < mazeHeight - 1 && Math.random() < 0.5) {
-                            hWalls[x][z + 1] = false;
+                            hWalls[x][z + 1] = false; // Remove horizontal wall
                         }
                     }
                 }
@@ -281,29 +256,26 @@
 
         function renderMaze() {
             const neonColors = [
-                { base: 0xff00ff, glow: 0xff77ff }, // Magenta
-                { base: 0x00ffff, glow: 0x77ffff }, // Cyan
-                { base: 0xffff00, glow: 0xffff77 }, // Yellow
-                { base: 0xff00aa, glow: 0xff77aa }, // Pink
-                { base: 0x00ffaa, glow: 0x77ffaa }  // Teal
+                0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa,
+                0xff5500, 0x5500ff, 0xff0055, 0x00ff00, 0x0055ff
             ];
-            const wallColorPair = neonColors[Math.floor(Math.random() * neonColors.length)];
-            const availableFloorColors = neonColors.filter(pair => pair.base !== wallColorPair.base);
-            const floorColorPair = availableFloorColors[Math.floor(Math.random() * availableFloorColors.length)];
+            const wallColor = neonColors[Math.floor(Math.random() * neonColors.length)];
+            const availableFloorColors = neonColors.filter(color => color !== wallColor);
+            const floorCeilingColor = availableFloorColors[Math.floor(Math.random() * availableFloorColors.length)];
 
             wallMaterials.wall = new THREE.MeshPhongMaterial({
-                map: createNeonTexture(wallColorPair.base, wallColorPair.glow),
-                emissive: wallColorPair.glow,
-                emissiveIntensity: 0.5,
-                shininess: 30,
-                side: THREE.DoubleSide
+                color: wallColor,
+                opacity: 1.0,
+                transparent: false,
+                side: THREE.DoubleSide,
+                shininess: 30
             });
             wallMaterials.floorCeiling = new THREE.MeshPhongMaterial({
-                map: createNeonTexture(floorColorPair.base, floorColorPair.glow),
-                emissive: floorColorPair.glow,
-                emissiveIntensity: 0.3,
-                shininess: 10,
-                side: THREE.DoubleSide
+                color: floorCeilingColor,
+                opacity: 1.0,
+                transparent: false,
+                side: THREE.DoubleSide,
+                shininess: 10
             });
 
             walls.clear();
@@ -650,8 +622,7 @@
         function updateUI() {
             if (gameActive) {
                 const timeElapsed = Math.floor((performance.now() - startTime) / 1000);
-                const difficultyName = Object.keys(difficulties).find(key => difficulties[key] === currentDifficulty);
-                uiElement.textContent = `Difficulty: ${difficultyName.charAt(0).toUpperCase() + difficultyName.slice(1)} | Score: ${score} | Time: ${timeElapsed}s`;
+                uiElement.textContent = `Score: ${score} | Time: ${timeElapsed}s`;
             }
         }
 
