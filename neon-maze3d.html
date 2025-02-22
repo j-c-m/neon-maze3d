@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.56</title>
+    <title>3D Neon Maze - v3.57</title>
     <style>
         body {
             margin: 0;
@@ -68,14 +68,13 @@
     <div id="ui">Score: 0 | Time: 0s</div>
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
-    <div id="menu"></div> <!-- Menu div is empty; buttons will be added dynamically -->
+    <div id="menu"></div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script>
         /*
          * Changelog:
          * Previous versions omitted for brevity (see original code for full history up to v3.39)
          *
-         * Version 3.46 - Replaced Recursive Division with Sidewinder algorithm
          * Version 3.47 - Replaced Sidewinder with Binary Tree algorithm
          * Version 3.48 - Replaced Binary Tree with Kruskal’s algorithm
          * Version 3.49 - Removed unnecessary wall openings in Kruskal’s
@@ -86,16 +85,17 @@
          * Version 3.54 - Adjusted maze size by difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
          * Version 3.55 - Adjusted mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
          * Version 3.56 - Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu
+         * Version 3.57 - Refined touch controls: swipe up and hold to move forward, swipe left/right to rotate
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.56 -> 3.57) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.57 -> 3.58) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command and include it below the changelog.
          * 5. Do not summarize previous code changes; provide full source code.
          *
-         * Git Commit Command for Version 3.56:
-         * git commit -m "Version 3.56: Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu from difficulty keys" neon-maze3d.html
+         * Git Commit Command for Version 3.57:
+         * git commit -m "Version 3.57: Refined touch controls: swipe up and hold to move forward, swipe left/right to rotate" neon-maze3d.html
          */
 
         const scene = new THREE.Scene();
@@ -105,34 +105,33 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        // Difficulty Configuration Block
         const difficulties = {
             easy: {
                 mazeWidth: 25,
                 mazeHeight: 25,
-                visibilityRadius: 15,    // Larger visibility for easier navigation
-                directionBias: 0.7       // Predictable paths
+                visibilityRadius: 15,
+                directionBias: 0.7
             },
             medium: {
                 mazeWidth: 75,
                 mazeHeight: 75,
-                visibilityRadius: 10,    // Reduced visibility
-                directionBias: 0.6       // Moderate randomness
+                visibilityRadius: 10,
+                directionBias: 0.6
             },
             hard: {
                 mazeWidth: 350,
                 mazeHeight: 350,
-                visibilityRadius: 5,     // Minimal visibility
-                directionBias: 0.4       // Highly random paths
+                visibilityRadius: 5,
+                directionBias: 0.4
             }
         };
 
-        let currentDifficulty = difficulties.easy; // Default, set in startGame
+        let currentDifficulty = difficulties.easy;
         let mazeWidth, mazeHeight, visibilityRadius;
         const cellSize = 2;
         const wallThickness = 0.01;
-        const maxSpeed = 0.8;  // Constant across all difficulties
-        const pathSpeed = 0.8; // Constant across all difficulties
+        const maxSpeed = 0.8;
+        const pathSpeed = 0.8;
         let maze = [], walls = new Map(), floor, ceiling, startMarker, finishMarker;
         let gameActive = false, startTime, score = 0;
         let start = { x: 0, z: 0 }, finish;
@@ -152,7 +151,7 @@
             for (let x = 0; x < mazeWidth; x++) {
                 maze[x] = [];
                 for (let z = 0; z < mazeHeight; z++) {
-                    maze[x][z] = 0; // 0 = unvisited
+                    maze[x][z] = 0;
                 }
             }
 
@@ -160,10 +159,10 @@
             let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
 
             const directions = [
-                { dx: 1, dz: 0, wall: 'v', wx: 1, wz: 0 }, // Right
-                { dx: -1, dz: 0, wall: 'v', wx: 0, wz: 0 }, // Left
-                { dx: 0, dz: 1, wall: 'h', wx: 0, wz: 1 }, // Down
-                { dx: 0, dz: -1, wall: 'h', wx: 0, wz: 0 } // Up
+                { dx: 1, dz: 0, wall: 'v', wx: 1, wz: 0 },
+                { dx: -1, dz: 0, wall: 'v', wx: 0, wz: 0 },
+                { dx: 0, dz: 1, wall: 'h', wx: 0, wz: 1 },
+                { dx: 0, dz: -1, wall: 'h', wx: 0, wz: 0 }
             ];
 
             function shuffleDirections(arr, bias) {
@@ -370,30 +369,19 @@
             if (gameActive && !path) document.body.requestPointerLock();
         });
 
+        // New Touch Control Variables
+        let touchActive = false;
         let touchStartX = 0, touchStartY = 0;
-        let touchActive = false, touchMoveActive = false, touchLookActive = false;
         let lastTouchX = 0, lastTouchY = 0;
-        let touchMoveZone, touchLookZone;
-
-        function setupTouchZones() {
-            const screenWidth = window.innerWidth;
-            touchMoveZone = screenWidth * 0.5;
-            touchLookZone = screenWidth * 0.5;
-        }
-
-        setupTouchZones();
-        window.addEventListener('resize', setupTouchZones);
 
         document.addEventListener('touchstart', (e) => {
             if (e.touches.length === 1 && gameActive && !path) {
+                touchActive = true;
                 touchStartX = e.touches[0].clientX;
                 touchStartY = e.touches[0].clientY;
-                touchActive = true;
                 lastTouchX = touchStartX;
                 lastTouchY = touchStartY;
-
-                touchMoveActive = touchStartX < touchMoveZone;
-                touchLookActive = touchStartX >= touchLookZone;
+                moveForward = false; // Reset movement
             }
         });
 
@@ -402,28 +390,16 @@
                 const touchX = e.touches[0].clientX;
                 const touchY = e.touches[0].clientY;
                 const deltaX = touchX - lastTouchX;
-                const deltaY = touchY - lastTouchY;
+                const deltaY = touchY - touchStartY; // Use startY for movement threshold
 
-                if (touchMoveActive) {
-                    if (Math.abs(deltaY) > Math.abs(deltaX) * 1.5) {
-                        moveForward = deltaY < 0;
-                        moveBackward = deltaY > 0;
-                        moveLeft = false;
-                        moveRight = false;
-                    } else if (Math.abs(deltaX) > Math.abs(deltaY)) {
-                        moveLeft = deltaX < 0;
-                        moveRight = deltaX > 0;
-                        moveForward = false;
-                        moveBackward = false;
-                    }
+                // Move forward if swiped up significantly and held
+                if (deltaY < -50) { // Threshold for upward swipe
+                    moveForward = true;
                 }
 
-                if (touchLookActive) {
-                    const lookDeltaX = deltaX * 0.001;
-                    const lookDeltaY = deltaY * 0.0005;
-                    camera.rotation.y -= lookDeltaX;
-                    camera.rotation.x = Math.max(-Math.PI / 4, Math.min(Math.PI / 4, camera.rotation.x - lookDeltaY));
-                }
+                // Rotate based on horizontal swipe
+                const rotationDelta = deltaX * 0.008; // Adjust sensitivity as needed
+                camera.rotation.y -= rotationDelta;
 
                 lastTouchX = touchX;
                 lastTouchY = touchY;
@@ -433,9 +409,7 @@
         document.addEventListener('touchend', () => {
             if (gameActive && !path) {
                 touchActive = false;
-                touchMoveActive = false;
-                touchLookActive = false;
-                moveForward = moveBackward = moveLeft = moveRight = false;
+                moveForward = false; // Stop moving when touch ends
             }
         });
 
@@ -492,11 +466,11 @@
         const menu = document.getElementById('menu');
 
         function setupMenu() {
-            menu.innerHTML = ''; // Clear any existing content
+            menu.innerHTML = '';
             Object.keys(difficulties).forEach(difficultyKey => {
                 const button = document.createElement('div');
                 button.className = 'menu-button';
-                button.textContent = difficultyKey.charAt(0).toUpperCase() + difficultyKey.slice(1); // Capitalize first letter
+                button.textContent = difficultyKey.charAt(0).toUpperCase() + difficultyKey.slice(1);
                 button.addEventListener('click', () => startGame(difficultyKey));
                 button.addEventListener('touchstart', (e) => {
                     e.preventDefault();
@@ -811,7 +785,6 @@
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-            setupTouchZones();
         });
     </script>
 </body>
