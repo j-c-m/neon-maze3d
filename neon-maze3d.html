@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.52</title>
+    <title>3D Neon Maze - v3.53</title>
     <style>
         body {
             margin: 0;
@@ -79,11 +79,6 @@
          * Changelog:
          * Previous versions omitted for brevity (see original code for full history up to v3.39)
          *
-         * Version 3.43
-         * - Replaced Hunt-and-Kill with Recursive Division algorithm for a more difficult maze with long corridors and dead ends
-         * - Ensured solvability with single passages per division, kept start at (0,0) and finish at (99,99)
-         * - Removed connectivity validation as Recursive Division guarantees a solvable maze
-         *
          * Version 3.44
          * - Added difficulty levels (Easy, Medium, Hard) affecting maze complexity via minimum corridor length in Recursive Division
          * - Simplified menu to only show difficulty options; selecting a difficulty starts the game immediately
@@ -119,8 +114,12 @@
          * - Replaced recursive backtracking with iterative stack-based backtracking to avoid recursion
          * - Maintained difficulty-based direction bias
          *
+         * Version 3.53
+         * - Ensured wall color is different from floor and ceiling color in renderMaze
+         * - Added more neon colors to the palette
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.52 -> 3.53) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.53 -> 3.54) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes") and include it below the changelog.
@@ -142,8 +141,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.52:
-        // git commit -m "Version 3.52: Replaced recursive backtracking with iterative stack-based backtracking to avoid recursion" neon-maze3d.html
+        // Git Commit Command for Version 3.53:
+        // git commit -m "Version 3.53: Ensured wall color differs from floor/ceiling color, added more neon colors to palette" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -250,9 +249,21 @@
         }
 
         function renderMaze() {
-            const neonColors = [0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa];
+            const neonColors = [
+                0xff00ff, // Magenta
+                0x00ffff, // Cyan
+                0xffff00, // Yellow
+                0xff00aa, // Hot Pink
+                0x00ffaa, // Neon Green
+                0xff5500, // Neon Orange
+                0x5500ff, // Neon Purple
+                0xff0055, // Bright Red
+                0x00ff00, // Lime Green
+                0x0055ff  // Electric Blue
+            ];
             const wallColor = neonColors[Math.floor(Math.random() * neonColors.length)];
-            const floorCeilingColor = neonColors[Math.floor(Math.random() * neonColors.length)];
+            const availableFloorColors = neonColors.filter(color => color !== wallColor);
+            const floorCeilingColor = availableFloorColors[Math.floor(Math.random() * availableFloorColors.length)];
 
             wallMaterials.wall = new THREE.MeshPhongMaterial({
                 color: wallColor,
