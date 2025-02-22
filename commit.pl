@@ -11,7 +11,7 @@ my $content = do { local $/; <$fh> }; # Slurp the entire file
 close($fh);
 
 # Extract the Git commit command
-if ($content =~ /\/\/\s*git commit -m "Version \d+\.\d+:.*? \(UUID: [a-z0-9-]+\)"\s*\S+/) {
+if ($content =~ /\/\/\s*git commit -m "Version \d+\.\d+:.*?"\s*\S+/) {
     my $git_command = $&; # $& is the matched string
     $git_command =~ s/\/\/\s*//; # Remove the comment prefix
     print "Extracted Git command: $git_command\n";
