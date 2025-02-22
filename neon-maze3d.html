@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.58</title>
+    <title>3D Neon Maze - v3.59</title>
     <style>
         body {
             margin: 0;
@@ -73,7 +73,6 @@
     <script>
         /*
          * Changelog:
-         * Version 3.49 - Removed unnecessary wall openings in Kruskal’s
          * Version 3.50 - Unified boundary wall materials
          * Version 3.51 - Replaced Kruskal’s with Recursive Backtracking
          * Version 3.52 - Switched to iterative stack-based backtracking
@@ -83,16 +82,17 @@
          * Version 3.56 - Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu
          * Version 3.57 - Refined touch controls: swipe up and hold to move forward, swipe left/right to rotate
          * Version 3.58 - Rotated player to face an open direction (not a wall) at start, corrected yaw alignment
+         * Version 3.59 - Added configurable loops and increased dead-end paths in maze generation for higher difficulty
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.58 -> 3.59) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.59 -> 3.60) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command and include it below the changelog.
          * 5. Do not remove these instructions in future updates.
          *
-         * Git Commit Command for Version 3.58:
-         * git commit -m "Version 3.58: Rotated player to face an open direction (not a wall) at start, corrected yaw alignment" neon-maze3d.html
+         * Git Commit Command for Version 3.59:
+         * git commit -m "Version 3.59: Added configurable loops and increased dead-end paths in maze generation for higher difficulty" neon-maze3d.html
          */
 
         const scene = new THREE.Scene();
@@ -103,9 +103,30 @@
         document.body.appendChild(renderer.domElement);
 
         const difficulties = {
-            easy: { mazeWidth: 25, mazeHeight: 25, visibilityRadius: 15, directionBias: 0.7 },
-            medium: { mazeWidth: 75, mazeHeight: 75, visibilityRadius: 10, directionBias: 0.6 },
-            hard: { mazeWidth: 350, mazeHeight: 350, visibilityRadius: 5, directionBias: 0.4 }
+            easy: {
+                mazeWidth: 25,
+                mazeHeight: 25,
+                visibilityRadius: 15,
+                directionBias: 0.7,
+                loopProbability: 0.05,  // Low chance of loops
+                deadEndProbability: 0.1 // Few dead ends
+            },
+            medium: {
+                mazeWidth: 75,
+                mazeHeight: 75,
+                visibilityRadius: 10,
+                directionBias: 0.6,
+                loopProbability: 0.15,  // Moderate loops
+                deadEndProbability: 0.3 // More dead ends
+            },
+            hard: {
+                mazeWidth: 350,
+                mazeHeight: 350,
+                visibilityRadius: 5,
+                directionBias: 0.4,
+                loopProbability: 0.25,  // High chance of loops
+                deadEndProbability: 0.5 // Many dead ends
+            }
         };
 
         let currentDifficulty = difficulties.easy;
@@ -128,6 +149,8 @@
             mazeWidth = currentDifficulty.mazeWidth;
             mazeHeight = currentDifficulty.mazeHeight;
             visibilityRadius = currentDifficulty.visibilityRadius;
+            const loopProbability = currentDifficulty.loopProbability;
+            const deadEndProbability = currentDifficulty.deadEndProbability;
 
             maze = [];
             for (let x = 0; x < mazeWidth; x++) {
@@ -190,8 +213,39 @@
                     maze[nx][nz] = 1;
                     visited.add(`${nx},${nz}`);
                     stack.push({ x: nx, z: nz });
+
+                    // Add dead-end paths with probability
+                    if (Math.random() < deadEndProbability && neighbors.length > 1) {
+                        const extraDir = neighbors[Math.floor(Math.random() * (neighbors.length - 1))];
+                        if (extraDir !== dir) {
+                            const ex = x + extraDir.dx;
+                            const ez = z + extraDir.dz;
+                            const ewx = x + extraDir.wx;
+                            const ewz = z + extraDir.wz;
+                            if (ex >= 0 && ex < mazeWidth && ez >= 0 && ez < mazeHeight && !visited.has(`${ex},${ez}`)) {
+                                if (extraDir.wall === 'v') vWalls[ewx][ewz] = false;
+                                else if (extraDir.wall === 'h') hWalls[ewx][ewz] = false;
+                                maze[ex][ez] = 1;
+                                visited.add(`${ex},${ez}`);
+                            }
+                        }
+                    }
                 } else {
                     stack.pop();
+                }
+            }
+
+            // Add loops by removing additional walls
+            for (let x = 0; x < mazeWidth; x++) {
+                for (let z = 0; z < mazeHeight; z++) {
+                    if (Math.random() < loopProbability) {
+                        if (x < mazeWidth - 1 && Math.random() < 0.5) {
+                            vWalls[x + 1][z] = false; // Remove vertical wall
+                        }
+                        if (z < mazeHeight - 1 && Math.random() < 0.5) {
+                            hWalls[x][z + 1] = false; // Remove horizontal wall
+                        }
+                    }
                 }
             }
 
@@ -263,12 +317,11 @@
 
             camera.position.set(startX, 0.1, startZ);
 
-            // Updated Code: Rotate player to face an open direction (not a wall)
             const directions = [
-                { name: 'East', dx: 1, dz: 0, yaw: -Math.PI / 2 },  // Forward +x
-                { name: 'South', dx: 0, dz: 1, yaw: -Math.PI },     // Forward +z
-                { name: 'North', dx: 0, dz: -1, yaw: 0 },           // Forward -z (default)
-                { name: 'West', dx: -1, dz: 0, yaw: Math.PI / 2 }   // Forward -x
+                { name: 'East', dx: 1, dz: 0, yaw: -Math.PI / 2 },
+                { name: 'South', dx: 0, dz: 1, yaw: -Math.PI },
+                { name: 'North', dx: 0, dz: -1, yaw: 0 },
+                { name: 'West', dx: -1, dz: 0, yaw: Math.PI / 2 }
             ];
 
             let openDirectionFound = false;
@@ -279,10 +332,10 @@
                 let isOpen = false;
 
                 if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
-                    if (dir.dx === 1 && !maze.vWalls[1][0]) isOpen = true;         // East: no vWall between (0,0) and (1,0)
-                    else if (dir.dx === -1 && !maze.vWalls[0][0]) isOpen = true;   // West: no vWall at (0,0)
-                    else if (dir.dz === 1 && !maze.hWalls[0][1]) isOpen = true;    // South: no hWall between (0,0) and (0,1)
-                    else if (dir.dz === -1 && !maze.hWalls[0][0]) isOpen = true;   // North: no hWall at (0,0)
+                    if (dir.dx === 1 && !maze.vWalls[1][0]) isOpen = true;
+                    else if (dir.dx === -1 && !maze.vWalls[0][0]) isOpen = true;
+                    else if (dir.dz === 1 && !maze.hWalls[0][1]) isOpen = true;
+                    else if (dir.dz === -1 && !maze.hWalls[0][0]) isOpen = true;
                 }
 
                 console.log(`${dir.name}: Adjacent (${nx}, ${nz}), Open: ${isOpen}, vWalls[1][0]: ${maze.vWalls[1][0]}, hWalls[0][1]: ${maze.hWalls[0][1]}, vWalls[0][0]: ${maze.vWalls[0][0]}, hWalls[0][0]: ${maze.hWalls[0][0]}`);
@@ -297,7 +350,7 @@
 
             if (!openDirectionFound) {
                 console.warn("No open direction found! Defaulting to East (yaw: -π/2)");
-                camera.rotation.y = -Math.PI / 2; // Default to East
+                camera.rotation.y = -Math.PI / 2;
             }
 
             gameActive = true;
