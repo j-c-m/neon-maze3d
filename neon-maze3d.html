@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.53</title>
+    <title>3D Neon Maze - v3.54</title>
     <style>
         body {
             margin: 0;
@@ -79,11 +79,6 @@
          * Changelog:
          * Previous versions omitted for brevity (see original code for full history up to v3.39)
          *
-         * Version 3.44
-         * - Added difficulty levels (Easy, Medium, Hard) affecting maze complexity via minimum corridor length in Recursive Division
-         * - Simplified menu to only show difficulty options; selecting a difficulty starts the game immediately
-         * - Fixed infinite recursion in divide() by ensuring valid split conditions with difficulty
-         *
          * Version 3.45
          * - Fixed Recursive Division to generate long corridors instead of big rooms by adjusting wall placement logic
          * - Difficulty now controls corridor length more effectively (Easy: shorter, Hard: longer)
@@ -118,8 +113,11 @@
          * - Ensured wall color is different from floor and ceiling color in renderMaze
          * - Added more neon colors to the palette
          *
+         * Version 3.54
+         * - Adjusted maze size based on difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.53 -> 3.54) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.54 -> 3.55) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes") and include it below the changelog.
@@ -141,8 +139,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.53:
-        // git commit -m "Version 3.53: Ensured wall color differs from floor/ceiling color, added more neon colors to palette" neon-maze3d.html
+        // Git Commit Command for Version 3.54:
+        // git commit -m "Version 3.54: Adjusted maze size based on difficulty - Easy (50x50), Medium (75x75), Hard (100x100)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -151,12 +149,12 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        let mazeWidth = 100, mazeHeight = 100;
+        let mazeWidth, mazeHeight; // Now set per difficulty in generateMaze
         const cellSize = 2;
         const wallThickness = 0.01;
         let maze = [], walls = new Map(), floor, ceiling, startMarker, finishMarker;
         let gameActive = false, startTime, score = 0;
-        let start = { x: 0, z: 0 }, finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
+        let start = { x: 0, z: 0 }, finish; // finish will be set dynamically based on maze size
         let path = null, pathIndex = 0, pathMarkers = [];
         let fogActive = true;
         let fogColor = 0x111111;
@@ -166,6 +164,22 @@
         let wallMaterials = {};
 
         function generateMaze(difficulty) {
+            // Set maze size based on difficulty
+            switch (difficulty) {
+                case 1: // Easy
+                    mazeWidth = 50;
+                    mazeHeight = 50;
+                    break;
+                case 2: // Medium
+                    mazeWidth = 75;
+                    mazeHeight = 75;
+                    break;
+                case 3: // Hard
+                    mazeWidth = 100;
+                    mazeHeight = 100;
+                    break;
+            }
+
             maze = [];
             for (let x = 0; x < mazeWidth; x++) {
                 maze[x] = [];
@@ -246,6 +260,9 @@
 
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
+
+            // Set finish position based on maze size
+            finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
         }
 
         function renderMaze() {
@@ -534,9 +551,9 @@
         const hardButton = document.getElementById('hardButton');
 
         function setupMenu() {
-            easyButton.addEventListener('click', () => startGame(1));    // Easy: more predictable
-            mediumButton.addEventListener('click', () => startGame(2));  // Medium: balanced
-            hardButton.addEventListener('click', () => startGame(3));    // Hard: more random
+            easyButton.addEventListener('click', () => startGame(1));    // Easy: 50x50
+            mediumButton.addEventListener('click', () => startGame(2));  // Medium: 75x75
+            hardButton.addEventListener('click', () => startGame(3));    // Hard: 100x100
 
             [easyButton, mediumButton, hardButton].forEach(button => {
                 button.addEventListener('touchstart', (e) => { e.preventDefault(); button.click(); });
@@ -573,7 +590,7 @@
             velocity.set(0, 0, 0);
             moveForward = moveBackward = moveLeft = moveRight = false;
             updateUI();
-            generateMaze(difficulty);
+            generateMaze(difficulty); // Sets mazeWidth and mazeHeight
             renderMaze();
             animate();
         }
@@ -593,7 +610,7 @@
             walls.clear();
             maze = [];
             start = { x: 0, z: 0 };
-            finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
+            // finish will be reset in generateMaze based on difficulty
             gameActive = true;
             startTime = performance.now();
             path = null;
