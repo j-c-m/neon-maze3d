@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.49</title>
+    <title>3D Neon Maze - v3.50</title>
     <style>
         body {
             margin: 0;
@@ -113,8 +113,11 @@
          * Version 3.49
          * - Removed unnecessary opening of start (0,0) and finish (99,99) walls in Kruskal’s, as player starts inside maze
          *
+         * Version 3.50
+         * - Made boundary walls use the same material as normal walls, simplifying rendering logic in renderMaze and updateVisibleObjects
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.49 -> 3.50) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.50 -> 3.51) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes") and include it below the changelog.
@@ -136,8 +139,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.49:
-        // git commit -m "Version 3.49: Removed unnecessary opening of start and finish walls in Kruskal’s algorithm, as player starts inside maze" neon-maze3d.html
+        // Git Commit Command for Version 3.50:
+        // git commit -m "Version 3.50: Made boundary walls use the same material as normal walls, simplifying rendering logic" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -231,7 +234,6 @@
                 }
             }
 
-            // No need to manually open start or finish walls, as player starts inside maze
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
         }
@@ -240,17 +242,9 @@
             const neonColors = [0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa];
             const wallColor = neonColors[Math.floor(Math.random() * neonColors.length)];
             const floorCeilingColor = neonColors[Math.floor(Math.random() * neonColors.length)];
-            const boundaryColor = neonColors[(neonColors.indexOf(wallColor) + 1) % neonColors.length];
 
             wallMaterials.wall = new THREE.MeshPhongMaterial({
                 color: wallColor,
-                opacity: 1.0,
-                transparent: false,
-                side: THREE.DoubleSide,
-                shininess: 30
-            });
-            wallMaterials.boundary = new THREE.MeshPhongMaterial({
-                color: boundaryColor,
                 opacity: 1.0,
                 transparent: false,
                 side: THREE.DoubleSide,
@@ -327,10 +321,8 @@
                         const key = `v_${x}_${startZ}_${length}`;
                         newWalls.add(key);
                         if (!walls.has(key)) {
-                            const isBoundary = (x === 0 || x === mazeWidth);
                             const geometry = new THREE.BoxGeometry(wallThickness, cellSize, cellSize * length);
-                            const material = isBoundary ? wallMaterials.boundary : wallMaterials.wall;
-                            const wall = new THREE.Mesh(geometry, material);
+                            const wall = new THREE.Mesh(geometry, wallMaterials.wall);
                             const posX = x * cellSize - mazeWidth * cellSize / 2;
                             const posZ = (startZ + (length - 1) / 2) * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
                             wall.position.set(posX, 0, posZ);
@@ -353,10 +345,8 @@
                         const key = `h_${startX}_${z}_${length}`;
                         newWalls.add(key);
                         if (!walls.has(key)) {
-                            const isBoundary = (z === 0 || z === mazeHeight);
                             const geometry = new THREE.BoxGeometry(cellSize * length, cellSize, wallThickness);
-                            const material = isBoundary ? wallMaterials.boundary : wallMaterials.wall;
-                            const wall = new THREE.Mesh(geometry, material);
+                            const wall = new THREE.Mesh(geometry, wallMaterials.wall);
                             const posX = (startX + (length - 1) / 2) * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
                             const posZ = z * cellSize - mazeHeight * cellSize / 2;
                             wall.position.set(posX, 0, posZ);
