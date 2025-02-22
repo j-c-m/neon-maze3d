@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.44 (UUID: f7e8d9c2-b1a0-4f5e-9d3c-6b7a8e9f0c1d)</title>
+    <title>3D Neon Maze - v3.45 (UUID: 8a4b2c1d-5e6f-4d9c-8b3a-7f1e0c9d2b5a)</title>
     <style>
         body {
             margin: 0;
@@ -94,8 +94,12 @@
          * - Simplified menu to only show difficulty options; selecting a difficulty starts the game immediately
          * - Fixed infinite recursion in divide() by ensuring valid split conditions with difficulty
          *
+         * Version 3.45 (UUID: 8a4b2c1d-5e6f-4d9c-8b3a-7f1e0c9d2b5a)
+         * - Fixed Recursive Division to generate long corridors instead of big rooms by adjusting wall placement logic
+         * - Difficulty now controls corridor length more effectively (Easy: shorter, Hard: longer)
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.44 -> 3.45) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.45 -> 3.46) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Include the last 10 most recent changes in the changelog.
@@ -118,8 +122,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.44:
-        // git commit -m "Version 3.44: Added difficulty levels (Easy, Medium, Hard) with adjustable corridor length in maze generation, simplified menu to only difficulty options that start the game, fixed infinite recursion in divide() (UUID: f7e8d9c2-b1a0-4f5e-9d3c-6b7a8e9f0c1d)" neon-maze3d.html
+        // Git Commit Command for Version 3.45:
+        // git commit -m "Version 3.45: Fixed Recursive Division to generate long corridors instead of big rooms, improved difficulty control over corridor length (UUID: 8a4b2c1d-5e6f-4d9c-8b3a-7f1e0c9d2b5a)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -165,42 +169,46 @@
             }
 
             function divide(x, z, width, height, difficultyLevel) {
-                // Minimum size to split must account for difficulty and leave space for corridors
-                const minSplitSize = difficultyLevel + 2; // +2 to ensure space for passage and remainder
-                if (width < minSplitSize || height < minSplitSize) return; // Stop if too small to split
+                if (width < 2 || height < 2) return; // Stop if too small to divide
 
                 const horizontal = width > height; // Prefer splitting the longer dimension
                 let wallPos, passagePos;
-                const minCorridorLength = difficultyLevel; // Easy: 1, Medium: 3, Hard: 5
+                const baseCorridorLength = difficultyLevel * 4; // Scale difficulty: Easy=4, Medium=12, Hard=20
 
                 if (horizontal) {
                     // Horizontal division (vertical wall)
-                    const maxWallPos = width - minCorridorLength - 1; // Ensure space after wall
-                    if (maxWallPos <= minCorridorLength) return; // Too small to split
-                    wallPos = x + minCorridorLength + Math.floor(Math.random() * (maxWallPos - minCorridorLength));
-                    passagePos = z + Math.floor(Math.random() * height); // Random z position for passage
+                    if (width <= baseCorridorLength + 2) return; // Stop if too narrow for a corridor
+                    // Place wall near an edge to create a corridor
+                    const maxOffset = Math.min(baseCorridorLength, Math.floor(width / 2) - 1);
+                    const offset = Math.floor(Math.random() * (maxOffset + 1));
+                    wallPos = x + offset + 1; // +1 to avoid edge
+                    passagePos = z + Math.floor(Math.random() * height); // Random passage
+
                     for (let i = z; i < z + height; i++) {
                         vWalls[wallPos][i] = true;
                     }
                     vWalls[wallPos][passagePos] = false; // Create passage
 
-                    // Recursively divide left and right sections
-                    divide(x, z, wallPos - x, height, difficultyLevel);
-                    divide(wallPos, z, x + width - wallPos, height, difficultyLevel);
+                    // Recursively divide both sides
+                    divide(x, z, wallPos - x, height, difficultyLevel); // Left corridor
+                    divide(wallPos, z, x + width - wallPos, height, difficultyLevel); // Right remainder
                 } else {
                     // Vertical division (horizontal wall)
-                    const maxWallPos = height - minCorridorLength - 1; // Ensure space after wall
-                    if (maxWallPos <= minCorridorLength) return; // Too small to split
-                    wallPos = z + minCorridorLength + Math.floor(Math.random() * (maxWallPos - minCorridorLength));
-                    passagePos = x + Math.floor(Math.random() * width); // Random x position for passage
+                    if (height <= baseCorridorLength + 2) return; // Stop if too short for a corridor
+                    // Place wall near an edge to create a corridor
+                    const maxOffset = Math.min(baseCorridorLength, Math.floor(height / 2) - 1);
+                    const offset = Math.floor(Math.random() * (maxOffset + 1));
+                    wallPos = z + offset + 1; // +1 to avoid edge
+                    passagePos = x + Math.floor(Math.random() * width); // Random passage
+
                     for (let i = x; i < x + width; i++) {
                         hWalls[i][wallPos] = true;
                     }
                     hWalls[passagePos][wallPos] = false; // Create passage
 
-                    // Recursively divide top and bottom sections
-                    divide(x, z, width, wallPos - z, difficultyLevel);
-                    divide(x, wallPos, width, z + height - wallPos, difficultyLevel);
+                    // Recursively divide both sides
+                    divide(x, z, width, wallPos - z, difficultyLevel); // Top corridor
+                    divide(x, wallPos, width, z + height - wallPos, difficultyLevel); // Bottom remainder
                 }
             }
 
@@ -496,9 +504,9 @@
         const hardButton = document.getElementById('hardButton');
 
         function setupMenu() {
-            easyButton.addEventListener('click', () => startGame(1));    // Easy: min corridor length 1
-            mediumButton.addEventListener('click', () => startGame(3));  // Medium: min corridor length 3
-            hardButton.addEventListener('click', () => startGame(5));    // Hard: min corridor length 5
+            easyButton.addEventListener('click', () => startGame(1));    // Easy: shorter corridors
+            mediumButton.addEventListener('click', () => startGame(3));  // Medium: medium corridors
+            hardButton.addEventListener('click', () => startGame(5));    // Hard: longer corridors
 
             [easyButton, mediumButton, hardButton].forEach(button => {
                 button.addEventListener('touchstart', (e) => { e.preventDefault(); button.click(); });
