@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.49 (UUID: 5d8f2c1b-4e3a-4c9d-8b6f-7a0e3d9c1f2e)</title>
+    <title>3D Neon Maze - v3.49</title>
     <style>
         body {
             margin: 0;
@@ -79,45 +79,45 @@
          * Changelog:
          * Previous versions omitted for brevity (see original code for full history up to v3.39)
          *
-         * Version 3.42 (UUID: e2f1g0h9-i8j7-6k5l-m4n3-p2q1r0s9t8)
+         * Version 3.42
          * - Fixed Hunt-and-Kill algorithm to ensure all cells are visited and start (0,0) is connected to finish (99,99)
          * - Added connectivity validation using flood-fill; falls back to recursive backtracking if maze is impossible
          * - Maintained high dead-end density for difficulty
          *
-         * Version 3.43 (UUID: f3g2h1i0-j9k8-7l6m-n5p4-q3r2s1t0u9)
+         * Version 3.43
          * - Replaced Hunt-and-Kill with Recursive Division algorithm for a more difficult maze with long corridors and dead ends
          * - Ensured solvability with single passages per division, kept start at (0,0) and finish at (99,99)
          * - Removed connectivity validation as Recursive Division guarantees a solvable maze
          *
-         * Version 3.44 (UUID: f7e8d9c2-b1a0-4f5e-9d3c-6b7a8e9f0c1d)
+         * Version 3.44
          * - Added difficulty levels (Easy, Medium, Hard) affecting maze complexity via minimum corridor length in Recursive Division
          * - Simplified menu to only show difficulty options; selecting a difficulty starts the game immediately
          * - Fixed infinite recursion in divide() by ensuring valid split conditions with difficulty
          *
-         * Version 3.45 (UUID: 8a4b2c1d-5e6f-4d9c-8b3a-7f1e0c9d2b5a)
+         * Version 3.45
          * - Fixed Recursive Division to generate long corridors instead of big rooms by adjusting wall placement logic
          * - Difficulty now controls corridor length more effectively (Easy: shorter, Hard: longer)
          *
-         * Version 3.46 (UUID: 4c7d9e2f-1a3b-4e8c-9d5f-6b2a0e8c1d3f)
+         * Version 3.46
          * - Replaced Recursive Division with Sidewinder algorithm to generate mazes with long horizontal corridors
          * - Difficulty controls average run length (Easy: ~5, Medium: ~10, Hard: ~20)
          *
-         * Version 3.47 (UUID: 9e3f7d2c-4b1a-4e9d-8c5f-6a0b3e8d1c2f)
+         * Version 3.47
          * - Replaced Sidewinder with Binary Tree algorithm for balanced corridors without large rooms
          * - Difficulty controls randomness in passage direction (Easy: biased, Medium: moderate, Hard: random)
          *
-         * Version 3.48 (UUID: 7b2e9d4f-3c1a-4e8d-9f5c-6a0b3e8d1c2f)
+         * Version 3.48
          * - Replaced Binary Tree with Kruskal’s algorithm for organic, winding corridors
          * - Difficulty controls connection probability (Easy: more connections, Medium: balanced, Hard: fewer connections)
          *
-         * Version 3.49 (UUID: 5d8f2c1b-4e3a-4c9d-8b6f-7a0e3d9c1f2e)
+         * Version 3.49
          * - Removed unnecessary opening of start (0,0) and finish (99,99) walls in Kruskal’s, as player starts inside maze
          *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 3.49 -> 3.50) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
-         * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
+         * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes") and include it below the changelog.
          * 5. Do not summarize previous code changes in brackets or any other method; always provide the full source code in its entirety.
          *
          * Useful Constants and Tips:
@@ -137,7 +137,7 @@
          */
 
         // Git Commit Command for Version 3.49:
-        // git commit -m "Version 3.49: Removed unnecessary opening of start and finish walls in Kruskal’s algorithm, as player starts inside maze (UUID: 5d8f2c1b-4e3a-4c9d-8b6f-7a0e3d9c1f2e)" neon-maze3d.html
+        // git commit -m "Version 3.49: Removed unnecessary opening of start and finish walls in Kruskal’s algorithm, as player starts inside maze" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
