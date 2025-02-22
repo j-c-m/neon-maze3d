@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.46 (UUID: 4c7d9e2f-1a3b-4e8c-9d5f-6b2a0e8c1d3f)</title>
+    <title>3D Neon Maze - v3.47 (UUID: 9e3f7d2c-4b1a-4e9d-8c5f-6a0b3e8d1c2f)</title>
     <style>
         body {
             margin: 0;
@@ -102,8 +102,12 @@
          * - Replaced Recursive Division with Sidewinder algorithm to generate mazes with long horizontal corridors
          * - Difficulty controls average run length (Easy: ~5, Medium: ~10, Hard: ~20)
          *
+         * Version 3.47 (UUID: 9e3f7d2c-4b1a-4e9d-8c5f-6a0b3e8d1c2f)
+         * - Replaced Sidewinder with Binary Tree algorithm for balanced corridors without large rooms
+         * - Difficulty controls randomness in passage direction (Easy: biased, Medium: moderate, Hard: random)
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.46 -> 3.47) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.47 -> 3.48) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Include the last 10 most recent changes in the changelog.
@@ -126,8 +130,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.46:
-        // git commit -m "Version 3.46: Replaced Recursive Division with Sidewinder algorithm for long horizontal corridors, difficulty controls run length (Easy: ~5, Medium: ~10, Hard: ~20) (UUID: 4c7d9e2f-1a3b-4e8c-9d5f-6b2a0e8c1d3f)" neon-maze3d.html
+        // Git Commit Command for Version 3.47:
+        // git commit -m "Version 3.47: Replaced Sidewinder with Binary Tree algorithm for balanced corridors, difficulty controls passage direction randomness (Easy: biased, Medium: moderate, Hard: random) (UUID: 9e3f7d2c-4b1a-4e9d-8c5f-6a0b3e8d1c2f)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -162,7 +166,7 @@
             let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
             let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
 
-            // Set boundary walls (already true, just ensuring clarity)
+            // Set boundary walls
             for (let z = 0; z < mazeHeight; z++) {
                 vWalls[0][z] = true;
                 vWalls[mazeWidth][z] = true;
@@ -172,31 +176,37 @@
                 hWalls[x][mazeHeight] = true;
             }
 
-            // Sidewinder algorithm
-            const runLength = difficulty * 5; // Easy: 5, Medium: 10, Hard: 20 (average run length)
+            // Binary Tree algorithm
+            const bias = difficulty === 1 ? 0.8 : difficulty === 2 ? 0.5 : 0.3; // Easy: bias to east, Medium: balanced, Hard: more random
 
             for (let z = 0; z < mazeHeight; z++) {
-                let runStart = 0;
                 for (let x = 0; x < mazeWidth; x++) {
-                    // Carve horizontal passage in the current run
-                    if (x > 0) hWalls[x - 1][z] = false;
+                    // For each cell, carve a passage either east (vWall) or south (hWall), unless at the edge
+                    const canGoEast = x < mazeWidth - 1;
+                    const canGoSouth = z < mazeHeight - 1;
+                    let carveEast = false;
 
-                    // Decide whether to end the run
-                    const shouldEndRun = x === mazeWidth - 1 || (Math.random() < 1 / runLength && x - runStart > 0);
-                    if (shouldEndRun) {
-                        // Choose a random cell in the run to connect upwards (if not top row)
-                        if (z > 0) {
-                            const connectX = runStart + Math.floor(Math.random() * (x - runStart + 1));
-                            vWalls[connectX][z - 1] = false;
-                        }
-                        runStart = x + 1;
+                    if (canGoEast && canGoSouth) {
+                        carveEast = Math.random() < bias; // Bias controlled by difficulty
+                    } else if (canGoEast) {
+                        carveEast = true;
+                    } else if (canGoSouth) {
+                        carveEast = false;
+                    } else {
+                        continue; // Bottom-right corner, no passage needed
+                    }
+
+                    if (carveEast) {
+                        vWalls[x + 1][z] = false; // Open east wall
+                    } else {
+                        hWalls[x][z + 1] = false; // Open south wall
                     }
                 }
             }
 
             // Ensure start (0,0) and finish (99,99) are accessible
-            hWalls[0][0] = false; // Open start
-            vWalls[mazeWidth - 1][mazeHeight - 1] = false; // Open finish
+            vWalls[0][0] = false; // Open start (west wall)
+            hWalls[mazeWidth - 1][mazeHeight] = false; // Open finish (south wall)
 
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
@@ -488,9 +498,9 @@
         const hardButton = document.getElementById('hardButton');
 
         function setupMenu() {
-            easyButton.addEventListener('click', () => startGame(1));    // Easy: ~5 cell runs
-            mediumButton.addEventListener('click', () => startGame(2));  // Medium: ~10 cell runs
-            hardButton.addEventListener('click', () => startGame(4));    // Hard: ~20 cell runs
+            easyButton.addEventListener('click', () => startGame(1));    // Easy: biased to east
+            mediumButton.addEventListener('click', () => startGame(2));  // Medium: moderate randomness
+            hardButton.addEventListener('click', () => startGame(3));    // Hard: high randomness
 
             [easyButton, mediumButton, hardButton].forEach(button => {
                 button.addEventListener('touchstart', (e) => { e.preventDefault(); button.click(); });
