@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.51</title>
+    <title>3D Neon Maze - v3.52</title>
     <style>
         body {
             margin: 0;
@@ -79,11 +79,6 @@
          * Changelog:
          * Previous versions omitted for brevity (see original code for full history up to v3.39)
          *
-         * Version 3.42
-         * - Fixed Hunt-and-Kill algorithm to ensure all cells are visited and start (0,0) is connected to finish (99,99)
-         * - Added connectivity validation using flood-fill; falls back to recursive backtracking if maze is impossible
-         * - Maintained high dead-end density for difficulty
-         *
          * Version 3.43
          * - Replaced Hunt-and-Kill with Recursive Division algorithm for a more difficult maze with long corridors and dead ends
          * - Ensured solvability with single passages per division, kept start at (0,0) and finish at (99,99)
@@ -120,8 +115,12 @@
          * - Replaced Kruskal’s algorithm with Recursive Backtracking for maze generation
          * - Difficulty now biases direction choice (Easy: more predictable, Hard: more random)
          *
+         * Version 3.52
+         * - Replaced recursive backtracking with iterative stack-based backtracking to avoid recursion
+         * - Maintained difficulty-based direction bias
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.51 -> 3.52) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.52 -> 3.53) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes") and include it below the changelog.
@@ -143,8 +142,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.51:
-        // git commit -m "Version 3.51: Replaced Kruskal’s algorithm with Recursive Backtracking for maze generation, difficulty biases direction choice" neon-maze3d.html
+        // Git Commit Command for Version 3.52:
+        // git commit -m "Version 3.52: Replaced recursive backtracking with iterative stack-based backtracking to avoid recursion" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -179,7 +178,7 @@
             let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
             let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
 
-            // Recursive Backtracking
+            // Iterative Backtracking with a stack
             const directions = [
                 { dx: 1, dz: 0, wall: 'v', wx: 1, wz: 0 }, // Right
                 { dx: -1, dz: 0, wall: 'v', wx: 0, wz: 0 }, // Left
@@ -199,32 +198,52 @@
                 return arr;
             }
 
-            function carve(x, z, visited) {
-                maze[x][z] = 1; // Mark as visited (open space)
-                visited.add(`${x},${z}`);
+            const stack = [{ x: 0, z: 0 }];
+            const visited = new Set();
+            visited.add("0,0");
+            maze[0][0] = 1; // Mark starting cell as visited
 
+            while (stack.length > 0) {
+                const current = stack[stack.length - 1];
+                const { x, z } = current;
+
+                // Get unvisited neighbors
+                const neighbors = [];
                 const bias = difficulty === 1 ? 0.7 : difficulty === 2 ? 0.6 : 0.4; // Easy: predictable, Hard: random
                 const shuffledDirections = shuffleDirections([...directions], bias);
 
                 for (const dir of shuffledDirections) {
                     const nx = x + dir.dx;
                     const nz = z + dir.dz;
+                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && !visited.has(`${nx},${nz}`)) {
+                        neighbors.push(dir);
+                    }
+                }
+
+                if (neighbors.length > 0) {
+                    // Choose a random unvisited neighbor
+                    const dir = neighbors[Math.floor(Math.random() * neighbors.length)];
+                    const nx = x + dir.dx;
+                    const nz = z + dir.dz;
                     const wx = x + dir.wx;
                     const wz = z + dir.wz;
 
-                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && !visited.has(`${nx},${nz}`)) {
-                        if (dir.wall === 'v') {
-                            vWalls[wx][wz] = false;
-                        } else if (dir.wall === 'h') {
-                            hWalls[wx][wz] = false;
-                        }
-                        carve(nx, nz, visited);
+                    // Remove the wall between current cell and chosen neighbor
+                    if (dir.wall === 'v') {
+                        vWalls[wx][wz] = false;
+                    } else if (dir.wall === 'h') {
+                        hWalls[wx][wz] = false;
                     }
+
+                    // Mark the neighbor as visited and add it to the stack
+                    maze[nx][nz] = 1;
+                    visited.add(`${nx},${nz}`);
+                    stack.push({ x: nx, z: nz });
+                } else {
+                    // No unvisited neighbors, backtrack by popping the stack
+                    stack.pop();
                 }
             }
-
-            const visited = new Set();
-            carve(0, 0, visited); // Start at (0,0)
 
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
