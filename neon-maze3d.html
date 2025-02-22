@@ -68,11 +68,7 @@
     <div id="ui">Score: 0 | Time: 0s</div>
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
-    <div id="menu">
-        <div class="menu-button" id="easyButton">Easy</div>
-        <div class="menu-button" id="mediumButton">Medium</div>
-        <div class="menu-button" id="hardButton">Hard</div>
-    </div>
+    <div id="menu"></div> <!-- Menu div is empty; buttons will be added dynamically -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script>
         /*
@@ -89,7 +85,7 @@
          * Version 3.53 - Ensured distinct wall/floor colors, added neon palette
          * Version 3.54 - Adjusted maze size by difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
          * Version 3.55 - Adjusted mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
-         * Version 3.56 - Factored difficulty into a structured config block; maxSpeed and pathSpeed constant at 0.8
+         * Version 3.56 - Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu
          *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 3.56 -> 3.57) in the <title> and changelog.
@@ -99,7 +95,7 @@
          * 5. Do not summarize previous code changes; provide full source code.
          *
          * Git Commit Command for Version 3.56:
-         * git commit -m "Version 3.56: Factored difficulty into a structured config block; maxSpeed and pathSpeed constant at 0.8" neon-maze3d.html
+         * git commit -m "Version 3.56: Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu from difficulty keys" neon-maze3d.html
          */
 
         const scene = new THREE.Scene();
@@ -494,17 +490,19 @@
         const achievementElement = document.getElementById('achievementElement');
         const restartButton = document.getElementById('restartButton');
         const menu = document.getElementById('menu');
-        const easyButton = document.getElementById('easyButton');
-        const mediumButton = document.getElementById('mediumButton');
-        const hardButton = document.getElementById('hardButton');
 
         function setupMenu() {
-            easyButton.addEventListener('click', () => startGame('easy'));
-            mediumButton.addEventListener('click', () => startGame('medium'));
-            hardButton.addEventListener('click', () => startGame('hard'));
-
-            [easyButton, mediumButton, hardButton].forEach(button => {
-                button.addEventListener('touchstart', (e) => { e.preventDefault(); button.click(); });
+            menu.innerHTML = ''; // Clear any existing content
+            Object.keys(difficulties).forEach(difficultyKey => {
+                const button = document.createElement('div');
+                button.className = 'menu-button';
+                button.textContent = difficultyKey.charAt(0).toUpperCase() + difficultyKey.slice(1); // Capitalize first letter
+                button.addEventListener('click', () => startGame(difficultyKey));
+                button.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    startGame(difficultyKey);
+                });
+                menu.appendChild(button);
             });
         }
 
