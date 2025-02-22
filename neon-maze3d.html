@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.55</title>
+    <title>3D Neon Maze - v3.56</title>
     <style>
         body {
             margin: 0;
@@ -79,71 +79,28 @@
          * Changelog:
          * Previous versions omitted for brevity (see original code for full history up to v3.39)
          *
-         * Version 3.45
-         * - Fixed Recursive Division to generate long corridors instead of big rooms by adjusting wall placement logic
-         * - Difficulty now controls corridor length more effectively (Easy: shorter, Hard: longer)
-         *
-         * Version 3.46
-         * - Replaced Recursive Division with Sidewinder algorithm to generate mazes with long horizontal corridors
-         * - Difficulty controls average run length (Easy: ~5, Medium: ~10, Hard: ~20)
-         *
-         * Version 3.47
-         * - Replaced Sidewinder with Binary Tree algorithm for balanced corridors without large rooms
-         * - Difficulty controls randomness in passage direction (Easy: biased, Medium: moderate, Hard: random)
-         *
-         * Version 3.48
-         * - Replaced Binary Tree with Kruskal’s algorithm for organic, winding corridors
-         * - Difficulty controls connection probability (Easy: more connections, Medium: balanced, Hard: fewer connections)
-         *
-         * Version 3.49
-         * - Removed unnecessary opening of start (0,0) and finish (99,99) walls in Kruskal’s, as player starts inside maze
-         *
-         * Version 3.50
-         * - Made boundary walls use the same material as normal walls, simplifying rendering logic in renderMaze and updateVisibleObjects
-         *
-         * Version 3.51
-         * - Replaced Kruskal’s algorithm with Recursive Backtracking for maze generation
-         * - Difficulty now biases direction choice (Easy: more predictable, Hard: more random)
-         *
-         * Version 3.52
-         * - Replaced recursive backtracking with iterative stack-based backtracking to avoid recursion
-         * - Maintained difficulty-based direction bias
-         *
-         * Version 3.53
-         * - Ensured wall color is different from floor and ceiling color in renderMaze
-         * - Added more neon colors to the palette
-         *
-         * Version 3.54
-         * - Adjusted maze size based on difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
-         *
-         * Version 3.55
-         * - Adjust mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
+         * Version 3.46 - Replaced Recursive Division with Sidewinder algorithm
+         * Version 3.47 - Replaced Sidewinder with Binary Tree algorithm
+         * Version 3.48 - Replaced Binary Tree with Kruskal’s algorithm
+         * Version 3.49 - Removed unnecessary wall openings in Kruskal’s
+         * Version 3.50 - Unified boundary wall materials
+         * Version 3.51 - Replaced Kruskal’s with Recursive Backtracking
+         * Version 3.52 - Switched to iterative stack-based backtracking
+         * Version 3.53 - Ensured distinct wall/floor colors, added neon palette
+         * Version 3.54 - Adjusted maze size by difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
+         * Version 3.55 - Adjusted mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
+         * Version 3.56 - Factored difficulty into a structured config block; maxSpeed and pathSpeed constant at 0.8
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.55 -> 3.56) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.56 -> 3.57) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
-         * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes") and include it below the changelog.
-         * 5. Do not summarize previous code changes in brackets or any other method; always provide the full source code in its entirety.
+         * 4. Generate a Git commit command and include it below the changelog.
+         * 5. Do not summarize previous code changes; provide full source code.
          *
-         * Useful Constants and Tips:
-         * - maxSpeed (0.8): Controls manual movement speed; increase for faster movement, decrease for slower.
-         * - pathSpeed (0.8): Controls auto-pathfinding speed; adjust between 0.1-1.0 for desired pace (current 0.8 matches maxSpeed).
-         * - rotationLerpSpeed (0.1): Controls camera rotation speed during pathfinding; 0.05-0.5 range for smooth adjustments.
-         * - wallThickness (0.01): Minimum visible thickness; avoid <0.01 to prevent rendering issues.
-         * - safeDistance (wallThickness + 0.25): Collision buffer; tweak 0.25 for larger/smaller wall boundaries.
-         * - To debug pathfinding: Log 'path' variable or toggle path markers with 'P'.
-         *
-         * TODO - Ideas for Future Changes:
-         * - Implement a minimap showing player position and maze outline
-         * - Add collectible items that increase score when picked up
-         * - Add sound effects for movement, collisions, and completion
-         * - Implement a leaderboard system with local storage for high scores
-         * - Add dynamic obstacles that move within the maze
+         * Git Commit Command for Version 3.56:
+         * git commit -m "Version 3.56: Factored difficulty into a structured config block; maxSpeed and pathSpeed constant at 0.8" neon-maze3d.html
          */
-
-        // Git Commit Command for Version 3.55:
-        // git commit -m "Version 3.55: Adjust mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -152,36 +109,48 @@
         renderer.setPixelRatio(window.devicePixelRatio);
         document.body.appendChild(renderer.domElement);
 
-        let mazeWidth, mazeHeight; // Now set per difficulty in generateMaze
+        // Difficulty Configuration Block
+        const difficulties = {
+            easy: {
+                mazeWidth: 25,
+                mazeHeight: 25,
+                visibilityRadius: 15,    // Larger visibility for easier navigation
+                directionBias: 0.7       // Predictable paths
+            },
+            medium: {
+                mazeWidth: 75,
+                mazeHeight: 75,
+                visibilityRadius: 10,    // Reduced visibility
+                directionBias: 0.6       // Moderate randomness
+            },
+            hard: {
+                mazeWidth: 350,
+                mazeHeight: 350,
+                visibilityRadius: 5,     // Minimal visibility
+                directionBias: 0.4       // Highly random paths
+            }
+        };
+
+        let currentDifficulty = difficulties.easy; // Default, set in startGame
+        let mazeWidth, mazeHeight, visibilityRadius;
         const cellSize = 2;
         const wallThickness = 0.01;
+        const maxSpeed = 0.8;  // Constant across all difficulties
+        const pathSpeed = 0.8; // Constant across all difficulties
         let maze = [], walls = new Map(), floor, ceiling, startMarker, finishMarker;
         let gameActive = false, startTime, score = 0;
-        let start = { x: 0, z: 0 }, finish; // finish will be set dynamically based on maze size
+        let start = { x: 0, z: 0 }, finish;
         let path = null, pathIndex = 0, pathMarkers = [];
         let fogActive = true;
         let fogColor = 0x111111;
-        const visibilityRadius = 15;
 
         let pointLight;
         let wallMaterials = {};
 
-        function generateMaze(difficulty) {
-            // Set maze size based on difficulty
-            switch (difficulty) {
-                case 1: // Easy
-                    mazeWidth = 25;
-                    mazeHeight = 25;
-                    break;
-                case 2: // Medium
-                    mazeWidth = 75;
-                    mazeHeight = 75;
-                    break;
-                case 3: // Hard
-                    mazeWidth = 350;
-                    mazeHeight = 350;
-                    break;
-            }
+        function generateMaze() {
+            mazeWidth = currentDifficulty.mazeWidth;
+            mazeHeight = currentDifficulty.mazeHeight;
+            visibilityRadius = currentDifficulty.visibilityRadius;
 
             maze = [];
             for (let x = 0; x < mazeWidth; x++) {
@@ -194,7 +163,6 @@
             let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
             let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
 
-            // Iterative Backtracking with a stack
             const directions = [
                 { dx: 1, dz: 0, wall: 'v', wx: 1, wz: 0 }, // Right
                 { dx: -1, dz: 0, wall: 'v', wx: 0, wz: 0 }, // Left
@@ -203,11 +171,9 @@
             ];
 
             function shuffleDirections(arr, bias) {
-                // Bias towards predictable paths on easier difficulties
                 if (bias < 0.5) {
-                    arr.sort(() => Math.random() - bias); // More random on Hard
+                    arr.sort(() => Math.random() - bias);
                 } else {
-                    // Bias towards right/down on Easy/Medium
                     arr.sort((a, b) => (a.dx + a.dz) - (b.dx + b.dz));
                     if (Math.random() > bias) arr.reverse();
                 }
@@ -217,16 +183,14 @@
             const stack = [{ x: 0, z: 0 }];
             const visited = new Set();
             visited.add("0,0");
-            maze[0][0] = 1; // Mark starting cell as visited
+            maze[0][0] = 1;
 
             while (stack.length > 0) {
                 const current = stack[stack.length - 1];
                 const { x, z } = current;
 
-                // Get unvisited neighbors
                 const neighbors = [];
-                const bias = difficulty === 1 ? 0.7 : difficulty === 2 ? 0.6 : 0.4; // Easy: predictable, Hard: random
-                const shuffledDirections = shuffleDirections([...directions], bias);
+                const shuffledDirections = shuffleDirections([...directions], currentDifficulty.directionBias);
 
                 for (const dir of shuffledDirections) {
                     const nx = x + dir.dx;
@@ -237,49 +201,32 @@
                 }
 
                 if (neighbors.length > 0) {
-                    // Choose a random unvisited neighbor
                     const dir = neighbors[Math.floor(Math.random() * neighbors.length)];
                     const nx = x + dir.dx;
                     const nz = z + dir.dz;
                     const wx = x + dir.wx;
                     const wz = z + dir.wz;
 
-                    // Remove the wall between current cell and chosen neighbor
-                    if (dir.wall === 'v') {
-                        vWalls[wx][wz] = false;
-                    } else if (dir.wall === 'h') {
-                        hWalls[wx][wz] = false;
-                    }
+                    if (dir.wall === 'v') vWalls[wx][wz] = false;
+                    else if (dir.wall === 'h') hWalls[wx][wz] = false;
 
-                    // Mark the neighbor as visited and add it to the stack
                     maze[nx][nz] = 1;
                     visited.add(`${nx},${nz}`);
                     stack.push({ x: nx, z: nz });
                 } else {
-                    // No unvisited neighbors, backtrack by popping the stack
                     stack.pop();
                 }
             }
 
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
-
-            // Set finish position based on maze size
             finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
         }
 
         function renderMaze() {
             const neonColors = [
-                0xff00ff, // Magenta
-                0x00ffff, // Cyan
-                0xffff00, // Yellow
-                0xff00aa, // Hot Pink
-                0x00ffaa, // Neon Green
-                0xff5500, // Neon Orange
-                0x5500ff, // Neon Purple
-                0xff0055, // Bright Red
-                0x00ff00, // Lime Green
-                0x0055ff  // Electric Blue
+                0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa,
+                0xff5500, 0x5500ff, 0xff0055, 0x00ff00, 0x0055ff
             ];
             const wallColor = neonColors[Math.floor(Math.random() * neonColors.length)];
             const availableFloorColors = neonColors.filter(color => color !== wallColor);
@@ -409,12 +356,10 @@
         }
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        const maxSpeed = 0.8,
-              acceleration = 0.1,
+        const acceleration = 0.1,
               friction = 0.15,
               wallFriction = 0,
               rotationSpeed = 0.002,
-              pathSpeed = 0.8,
               rotationLerpSpeed = 0.1;
         let velocity = new THREE.Vector3(0, 0, 0);
         const raycaster = new THREE.Raycaster();
@@ -554,9 +499,9 @@
         const hardButton = document.getElementById('hardButton');
 
         function setupMenu() {
-            easyButton.addEventListener('click', () => startGame(1));    // Easy: 50x50
-            mediumButton.addEventListener('click', () => startGame(2));  // Medium: 75x75
-            hardButton.addEventListener('click', () => startGame(3));    // Hard: 100x100
+            easyButton.addEventListener('click', () => startGame('easy'));
+            mediumButton.addEventListener('click', () => startGame('medium'));
+            hardButton.addEventListener('click', () => startGame('hard'));
 
             [easyButton, mediumButton, hardButton].forEach(button => {
                 button.addEventListener('touchstart', (e) => { e.preventDefault(); button.click(); });
@@ -583,8 +528,9 @@
             }
         }
 
-        function startGame(difficulty) {
-            console.log(`Starting game with difficulty: ${difficulty}...`);
+        function startGame(difficultyKey) {
+            currentDifficulty = difficulties[difficultyKey];
+            console.log(`Starting game with difficulty: ${difficultyKey}...`);
             hideMenu();
             gameActive = true;
             startTime = performance.now();
@@ -593,7 +539,7 @@
             velocity.set(0, 0, 0);
             moveForward = moveBackward = moveLeft = moveRight = false;
             updateUI();
-            generateMaze(difficulty); // Sets mazeWidth and mazeHeight
+            generateMaze();
             renderMaze();
             animate();
         }
@@ -613,7 +559,6 @@
             walls.clear();
             maze = [];
             start = { x: 0, z: 0 };
-            // finish will be reset in generateMaze based on difficulty
             gameActive = true;
             startTime = performance.now();
             path = null;
@@ -621,7 +566,7 @@
             moveForward = moveBackward = moveLeft = moveRight = false;
             pathMarkers.forEach(marker => scene.remove(marker));
             pathMarkers = [];
-            showMenu(); // Show menu instead of restarting directly
+            showMenu();
             achievementElement.style.display = 'none';
             restartButton.style.display = 'none';
         }
