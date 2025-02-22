@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.43 (UUID: f3g2h1i0-j9k8-7l6m-n5p4-q3r2s1t0u9)</title>
+    <title>3D Neon Maze - v3.44 (UUID: f7e8d9c2-b1a0-4f5e-9d3c-6b7a8e9f0c1d)</title>
     <style>
         body {
             margin: 0;
@@ -69,8 +69,9 @@
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
     <div id="menu">
-        <div class="menu-button" id="startButton">Start Game</div>
-        <div class="menu-button" id="quitButton">Quit</div>
+        <div class="menu-button" id="easyButton">Easy</div>
+        <div class="menu-button" id="mediumButton">Medium</div>
+        <div class="menu-button" id="hardButton">Hard</div>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
     <script>
@@ -88,8 +89,13 @@
          * - Ensured solvability with single passages per division, kept start at (0,0) and finish at (99,99)
          * - Removed connectivity validation as Recursive Division guarantees a solvable maze
          *
+         * Version 3.44 (UUID: f7e8d9c2-b1a0-4f5e-9d3c-6b7a8e9f0c1d)
+         * - Added difficulty levels (Easy, Medium, Hard) affecting maze complexity via minimum corridor length in Recursive Division
+         * - Simplified menu to only show difficulty options; selecting a difficulty starts the game immediately
+         * - Fixed infinite recursion in divide() by ensuring valid split conditions with difficulty
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.43 -> 3.44) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.44 -> 3.45) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Include the last 10 most recent changes in the changelog.
@@ -105,7 +111,6 @@
          * - To debug pathfinding: Log 'path' variable or toggle path markers with 'P'.
          *
          * TODO - Ideas for Future Changes:
-         * - Add difficulty levels affecting maze complexity (e.g., more dead ends, longer paths)
          * - Implement a minimap showing player position and maze outline
          * - Add collectible items that increase score when picked up
          * - Add sound effects for movement, collisions, and completion
@@ -113,8 +118,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.43:
-        // git commit -m "Version 3.43: Replaced Hunt-and-Kill with Recursive Division algorithm for a difficult maze with long corridors and dead ends, ensured solvability with single passages (UUID: f3g2h1i0-j9k8-7l6m-n5p4-q3r2s1t0u9)" neon-maze3d.html
+        // Git Commit Command for Version 3.44:
+        // git commit -m "Version 3.44: Added difficulty levels (Easy, Medium, Hard) with adjustable corridor length in maze generation, simplified menu to only difficulty options that start the game, fixed infinite recursion in divide() (UUID: f7e8d9c2-b1a0-4f5e-9d3c-6b7a8e9f0c1d)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -137,7 +142,7 @@
         let pointLight;
         let wallMaterials = {};
 
-        function generateMaze() {
+        function generateMaze(difficulty) {
             maze = [];
             for (let x = 0; x < mazeWidth; x++) {
                 maze[x] = [];
@@ -159,15 +164,20 @@
                 hWalls[x][mazeHeight] = true;
             }
 
-            function divide(x, z, width, height) {
-                if (width < 2 || height < 2) return; // Stop if too small to divide
+            function divide(x, z, width, height, difficultyLevel) {
+                // Minimum size to split must account for difficulty and leave space for corridors
+                const minSplitSize = difficultyLevel + 2; // +2 to ensure space for passage and remainder
+                if (width < minSplitSize || height < minSplitSize) return; // Stop if too small to split
 
                 const horizontal = width > height; // Prefer splitting the longer dimension
                 let wallPos, passagePos;
+                const minCorridorLength = difficultyLevel; // Easy: 1, Medium: 3, Hard: 5
 
                 if (horizontal) {
                     // Horizontal division (vertical wall)
-                    wallPos = x + Math.floor(Math.random() * (width - 1)) + 1; // Random x position for wall
+                    const maxWallPos = width - minCorridorLength - 1; // Ensure space after wall
+                    if (maxWallPos <= minCorridorLength) return; // Too small to split
+                    wallPos = x + minCorridorLength + Math.floor(Math.random() * (maxWallPos - minCorridorLength));
                     passagePos = z + Math.floor(Math.random() * height); // Random z position for passage
                     for (let i = z; i < z + height; i++) {
                         vWalls[wallPos][i] = true;
@@ -175,11 +185,13 @@
                     vWalls[wallPos][passagePos] = false; // Create passage
 
                     // Recursively divide left and right sections
-                    divide(x, z, wallPos - x, height);
-                    divide(wallPos, z, x + width - wallPos, height);
+                    divide(x, z, wallPos - x, height, difficultyLevel);
+                    divide(wallPos, z, x + width - wallPos, height, difficultyLevel);
                 } else {
                     // Vertical division (horizontal wall)
-                    wallPos = z + Math.floor(Math.random() * (height - 1)) + 1; // Random z position for wall
+                    const maxWallPos = height - minCorridorLength - 1; // Ensure space after wall
+                    if (maxWallPos <= minCorridorLength) return; // Too small to split
+                    wallPos = z + minCorridorLength + Math.floor(Math.random() * (maxWallPos - minCorridorLength));
                     passagePos = x + Math.floor(Math.random() * width); // Random x position for passage
                     for (let i = x; i < x + width; i++) {
                         hWalls[i][wallPos] = true;
@@ -187,14 +199,13 @@
                     hWalls[passagePos][wallPos] = false; // Create passage
 
                     // Recursively divide top and bottom sections
-                    divide(x, z, width, wallPos - z);
-                    divide(x, wallPos, width, z + height - wallPos);
+                    divide(x, z, width, wallPos - z, difficultyLevel);
+                    divide(x, wallPos, width, z + height - wallPos, difficultyLevel);
                 }
             }
 
-            // Start division from the full maze
-            divide(0, 0, mazeWidth, mazeHeight);
-
+            // Start division from the full maze with difficulty
+            divide(0, 0, mazeWidth, mazeHeight, difficulty);
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
         }
@@ -480,20 +491,18 @@
         const achievementElement = document.getElementById('achievementElement');
         const restartButton = document.getElementById('restartButton');
         const menu = document.getElementById('menu');
-        const startButton = document.getElementById('startButton');
-        const quitButton = document.getElementById('quitButton');
+        const easyButton = document.getElementById('easyButton');
+        const mediumButton = document.getElementById('mediumButton');
+        const hardButton = document.getElementById('hardButton');
 
         function setupMenu() {
-            const size = 100;
-            const btn = document.createElement('div');
-            btn.className = 'menu-button';
-            btn.textContent = `${size}x${size}`;
-            btn.addEventListener('click', () => {
-                mazeWidth = mazeHeight = size;
-                finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
-                hideMenu();
+            easyButton.addEventListener('click', () => startGame(1));    // Easy: min corridor length 1
+            mediumButton.addEventListener('click', () => startGame(3));  // Medium: min corridor length 3
+            hardButton.addEventListener('click', () => startGame(5));    // Hard: min corridor length 5
+
+            [easyButton, mediumButton, hardButton].forEach(button => {
+                button.addEventListener('touchstart', (e) => { e.preventDefault(); button.click(); });
             });
-            menu.insertBefore(btn, quitButton);
         }
 
         function showMenu() {
@@ -503,28 +512,22 @@
 
         function hideMenu() {
             menu.style.display = 'none';
-            startGame();
         }
 
-        [startButton, quitButton, achievementElement, restartButton].forEach(element => {
+        [achievementElement, restartButton].forEach(element => {
             element.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouchEvent(element); });
             element.addEventListener('click', (e) => { e.preventDefault(); handleTouchEvent(element); });
         });
 
         function handleTouchEvent(element) {
-            if (element === startButton) {
-                hideMenu();
-            } else if (element === quitButton) {
-                alert('Game quit. Reload to start again.');
-                gameActive = false;
-                menu.style.display = 'none';
-            } else if (element === achievementElement || element === restartButton) {
+            if (element === achievementElement || element === restartButton) {
                 if (!gameActive) restartGame();
             }
         }
 
-        function startGame() {
-            console.log("Starting game...");
+        function startGame(difficulty) {
+            console.log(`Starting game with difficulty: ${difficulty}...`);
+            hideMenu();
             gameActive = true;
             startTime = performance.now();
             score = 0;
@@ -532,7 +535,7 @@
             velocity.set(0, 0, 0);
             moveForward = moveBackward = moveLeft = moveRight = false;
             updateUI();
-            generateMaze();
+            generateMaze(difficulty);
             renderMaze();
             animate();
         }
@@ -560,11 +563,9 @@
             moveForward = moveBackward = moveLeft = moveRight = false;
             pathMarkers.forEach(marker => scene.remove(marker));
             pathMarkers = [];
-            generateMaze();
-            renderMaze();
+            showMenu(); // Show menu instead of restarting directly
             achievementElement.style.display = 'none';
             restartButton.style.display = 'none';
-            animate();
         }
 
         function generateUUID() {
