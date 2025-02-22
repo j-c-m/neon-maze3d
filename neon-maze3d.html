@@ -106,7 +106,7 @@
             easy: {
                 mazeWidth: 25,
                 mazeHeight: 25,
-                visibilityRadius: 15,
+                fogDistance: 8,
                 directionBias: 0.7,
                 loopProbability: 0.05,  // Low chance of loops
                 deadEndProbability: 0.1 // Few dead ends
@@ -114,7 +114,7 @@
             medium: {
                 mazeWidth: 75,
                 mazeHeight: 75,
-                visibilityRadius: 10,
+                fogDistance: 6,
                 directionBias: 0.6,
                 loopProbability: 0.15,  // Moderate loops
                 deadEndProbability: 0.3 // More dead ends
@@ -122,7 +122,7 @@
             hard: {
                 mazeWidth: 350,
                 mazeHeight: 350,
-                visibilityRadius: 5,
+                fogDistance: 5,
                 directionBias: 0.4,
                 loopProbability: 0.25,  // High chance of loops
                 deadEndProbability: 0.5 // Many dead ends
@@ -130,7 +130,8 @@
         };
 
         let currentDifficulty = difficulties.easy;
-        let mazeWidth, mazeHeight, visibilityRadius;
+        let mazeWidth, mazeHeight;
+        const visibilityRadius = 15;
         const cellSize = 2;
         const wallThickness = 0.01;
         const maxSpeed = 0.8;
@@ -148,7 +149,6 @@
         function generateMaze() {
             mazeWidth = currentDifficulty.mazeWidth;
             mazeHeight = currentDifficulty.mazeHeight;
-            visibilityRadius = currentDifficulty.visibilityRadius;
             const loopProbability = currentDifficulty.loopProbability;
             const deadEndProbability = currentDifficulty.deadEndProbability;
 
@@ -613,7 +613,7 @@
 
         function updateFog(color) {
             if (fogActive) {
-                scene.fog = new THREE.Fog(color, 1, 5);
+                scene.fog = new THREE.Fog(color, 1, currentDifficulty.fogDistance);
             } else {
                 scene.fog = null;
             }
