@@ -115,11 +115,10 @@
          *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 3.49 -> 3.50) in the <title> and changelog.
-         * 2. Generate a new UUID using the generateUUID() function
-         * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
-         * 4. Include the last 10 most recent changes in the changelog.
-         * 5. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
-         * 6. Do not summarize previous code changes in brackets or any other method; always provide the full source code in its entirety.
+         * 2. Add a new entry to this changelog with the version and a brief description of changes.
+         * 3. Include the last 10 most recent changes in the changelog.
+         * 4. Generate a Git commit command (e.g., git commit -m "Version X.Y: Description of changes (UUID)") and include it below the changelog.
+         * 5. Do not summarize previous code changes in brackets or any other method; always provide the full source code in its entirety.
          *
          * Useful Constants and Tips:
          * - maxSpeed (0.8): Controls manual movement speed; increase for faster movement, decrease for slower.
@@ -593,14 +592,6 @@
             showMenu(); // Show menu instead of restarting directly
             achievementElement.style.display = 'none';
             restartButton.style.display = 'none';
-        }
-
-        function generateUUID() {
-            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-                const r = Math.random() * 16 | 0;
-                const v = c === 'x' ? r : (r & 0x3 | 0x8);
-                return v.toString(16);
-            });
         }
 
         function updateFog(color) {
