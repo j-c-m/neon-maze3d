@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v3.47 (UUID: 9e3f7d2c-4b1a-4e9d-8c5f-6a0b3e8d1c2f)</title>
+    <title>3D Neon Maze - v3.48 (UUID: 7b2e9d4f-3c1a-4e8d-9f5c-6a0b3e8d1c2f)</title>
     <style>
         body {
             margin: 0;
@@ -106,8 +106,12 @@
          * - Replaced Sidewinder with Binary Tree algorithm for balanced corridors without large rooms
          * - Difficulty controls randomness in passage direction (Easy: biased, Medium: moderate, Hard: random)
          *
+         * Version 3.48 (UUID: 7b2e9d4f-3c1a-4e8d-9f5c-6a0b3e8d1c2f)
+         * - Replaced Binary Tree with Kruskal’s algorithm for organic, winding corridors
+         * - Difficulty controls connection probability (Easy: more connections, Medium: balanced, Hard: fewer connections)
+         *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.47 -> 3.48) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 3.48 -> 3.49) in the <title> and changelog.
          * 2. Generate a new UUID using the generateUUID() function
          * 3. Add a new entry to this changelog with the version, UUID, and a brief description of changes.
          * 4. Include the last 10 most recent changes in the changelog.
@@ -130,8 +134,8 @@
          * - Add dynamic obstacles that move within the maze
          */
 
-        // Git Commit Command for Version 3.47:
-        // git commit -m "Version 3.47: Replaced Sidewinder with Binary Tree algorithm for balanced corridors, difficulty controls passage direction randomness (Easy: biased, Medium: moderate, Hard: random) (UUID: 9e3f7d2c-4b1a-4e9d-8c5f-6a0b3e8d1c2f)" neon-maze3d.html
+        // Git Commit Command for Version 3.48:
+        // git commit -m "Version 3.48: Replaced Binary Tree with Kruskal’s algorithm for organic, winding corridors, difficulty controls connection probability (Easy: more connections, Medium: balanced, Hard: fewer connections) (UUID: 7b2e9d4f-3c1a-4e8d-9f5c-6a0b3e8d1c2f)" neon-maze3d.html
 
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -166,47 +170,68 @@
             let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
             let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
 
-            // Set boundary walls
-            for (let z = 0; z < mazeHeight; z++) {
-                vWalls[0][z] = true;
-                vWalls[mazeWidth][z] = true;
-            }
-            for (let x = 0; x < mazeWidth; x++) {
-                hWalls[x][0] = true;
-                hWalls[x][mazeHeight] = true;
-            }
+            // Kruskal’s algorithm setup
+            const cells = [];
+            const edges = [];
+            const sets = new Map(); // Disjoint-set data structure
 
-            // Binary Tree algorithm
-            const bias = difficulty === 1 ? 0.8 : difficulty === 2 ? 0.5 : 0.3; // Easy: bias to east, Medium: balanced, Hard: more random
-
+            // Initialize cells and sets
             for (let z = 0; z < mazeHeight; z++) {
                 for (let x = 0; x < mazeWidth; x++) {
-                    // For each cell, carve a passage either east (vWall) or south (hWall), unless at the edge
-                    const canGoEast = x < mazeWidth - 1;
-                    const canGoSouth = z < mazeHeight - 1;
-                    let carveEast = false;
+                    const id = `${x},${z}`;
+                    cells.push({ x, z });
+                    sets.set(id, [id]); // Each cell starts in its own set
+                }
+            }
 
-                    if (canGoEast && canGoSouth) {
-                        carveEast = Math.random() < bias; // Bias controlled by difficulty
-                    } else if (canGoEast) {
-                        carveEast = true;
-                    } else if (canGoSouth) {
-                        carveEast = false;
-                    } else {
-                        continue; // Bottom-right corner, no passage needed
+            // Generate all possible edges (walls between cells)
+            for (let z = 0; z < mazeHeight; z++) {
+                for (let x = 0; x < mazeWidth; x++) {
+                    if (x < mazeWidth - 1) {
+                        edges.push({ type: 'v', x: x + 1, z, from: `${x},${z}`, to: `${x + 1},${z}` });
                     }
+                    if (z < mazeHeight - 1) {
+                        edges.push({ type: 'h', x, z: z + 1, from: `${x},${z}`, to: `${x},${z + 1}` });
+                    }
+                }
+            }
 
-                    if (carveEast) {
-                        vWalls[x + 1][z] = false; // Open east wall
-                    } else {
-                        hWalls[x][z + 1] = false; // Open south wall
+            // Shuffle edges with difficulty-based weighting
+            const connectionBias = difficulty === 1 ? 0.7 : difficulty === 2 ? 0.5 : 0.3; // Easy: more connections, Hard: fewer
+            edges.sort(() => Math.random() - connectionBias);
+
+            // Union-Find functions
+            function find(cellId) {
+                const set = sets.get(cellId);
+                return set[0]; // Representative of the set
+            }
+
+            function union(cellId1, cellId2) {
+                const set1 = sets.get(cellId1);
+                const set2 = sets.get(cellId2);
+                const newSet = set1.concat(set2);
+                newSet.forEach(id => sets.set(id, newSet));
+            }
+
+            // Kruskal’s algorithm: Connect cells by removing walls
+            for (const edge of edges) {
+                const { type, x, z, from, to } = edge;
+                const root1 = find(from);
+                const root2 = find(to);
+
+                if (root1 !== root2) {
+                    if (type === 'v') {
+                        vWalls[x][z] = false;
+                    } else if (type === 'h') {
+                        hWalls[x][z] = false;
                     }
+                    union(from, to);
                 }
             }
 
             // Ensure start (0,0) and finish (99,99) are accessible
             vWalls[0][0] = false; // Open start (west wall)
-            hWalls[mazeWidth - 1][mazeHeight] = false; // Open finish (south wall)
+            hWalls[mazeWidth - 1][mazeHeight - 1] = false; // Open finish (south wall)
 
             maze.vWalls = vWalls;
             maze.hWalls = hWalls;
@@ -498,9 +523,9 @@
         const hardButton = document.getElementById('hardButton');
 
         function setupMenu() {
-            easyButton.addEventListener('click', () => startGame(1));    // Easy: biased to east
-            mediumButton.addEventListener('click', () => startGame(2));  // Medium: moderate randomness
-            hardButton.addEventListener('click', () => startGame(3));    // Hard: high randomness
+            easyButton.addEventListener('click', () => startGame(1));    // Easy: more connections
+            mediumButton.addEventListener('click', () => startGame(2));  // Medium: balanced
+            hardButton.addEventListener('click', () => startGame(3));    // Hard: fewer connections
 
             [easyButton, mediumButton, hardButton].forEach(button => {
                 button.addEventListener('touchstart', (e) => { e.preventDefault(); button.click(); });
