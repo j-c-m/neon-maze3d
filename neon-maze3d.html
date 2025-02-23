@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.02</title>
+    <title>3D Neon Maze - v4.03</title>
     <style>
         body {
             margin: 0;
@@ -69,6 +69,7 @@
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
     <div id="menu"></div>
+
     <script type="importmap">
         {
           "imports": {
@@ -77,9 +78,11 @@
           }
         }
     </script>
+
     <script type="module">
         /*
          * Changelog:
+         * Version 4.03 - Complete refactor: modular structure, improved performance, better code organization
          * Version 4.02 - Factored out material and color variables into a materialConfig object with documentation
          * Version 4.01 - Factored out lighting variables into a lightingConfig object with documentation
          * Version 4.0  - Updated to major version 4.0 with no functional changes
@@ -89,133 +92,269 @@
          * Version 3.56 - Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu
          * Version 3.55 - Adjusted mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
          * Version 3.54 - Adjusted maze size by difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
-         * Version 3.53 - Ensured distinct wall/floor colors, added neon palette
          *
-         * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.02 -> 4.03) in the <title> and changelog.
-         * 2. Add a new entry to this changelog with the version and a brief description of changes.
-         * 3. Include the last 10 most recent changes in the changelog.
-         * 4. Generate a Git commit command prefixed with "Version X.XX:" (e.g., "Version 4.03:") followed by the description and include it below the changelog.
-         * 5. Do not remove these instructions in future updates.
-         * 6. Do not remove comments that document variables and code logic.
-         *
-         * Git Commit Command for this change:
-         * git commit -m "Version 4.02: Factored out material and color variables into a materialConfig object with documentation" neon-maze3d.html
+         * Git Commit Command:
+         * git commit -m "Version 4.03: Complete refactor - modular structure, improved performance, better code organization" neon-maze3d.html
          */
 
         import * as THREE from 'three';
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        document.body.appendChild(renderer.domElement);
 
-        const difficulties = {
-            easy: {
-                mazeWidth: 25,
-                mazeHeight: 25,
-                fogDistance: 8,
-                directionBias: 0.7,
-                loopProbability: 0.05,  // Low chance of loops
-                deadEndProbability: 0.1 // Few dead ends
+        // Configuration object containing all game settings
+        const CONFIG = {
+            difficulty: {
+                easy: {
+                    mazeWidth: 25,          // Width of the maze in cells
+                    mazeHeight: 25,         // Height of the maze in cells
+                    fogDistance: 8,         // Fog visibility distance
+                    directionBias: 0.7,     // Bias for directional maze generation
+                    loopProbability: 0.05,  // Chance of creating loops
+                    deadEndProbability: 0.1 // Chance of creating dead ends
+                },
+                medium: { mazeWidth: 75, mazeHeight: 75, fogDistance: 6, directionBias: 0.6, loopProbability: 0.15, deadEndProbability: 0.3 },
+                hard: { mazeWidth: 350, mazeHeight: 350, fogDistance: 5, directionBias: 0.4, loopProbability: 0.25, deadEndProbability: 0.5 }
             },
-            medium: {
-                mazeWidth: 75,
-                mazeHeight: 75,
-                fogDistance: 6,
-                directionBias: 0.6,
-                loopProbability: 0.15,  // Moderate loops
-                deadEndProbability: 0.3 // More dead ends
+            game: {
+                visibilityRadius: 15,       // Distance in cells for rendering walls
+                cellSize: 2,               // Size of each maze cell in world units
+                wallThickness: 0.01,       // Thickness of walls and floor
+                maxSpeed: 0.8,            // Maximum player movement speed
+                pathSpeed: 0.8,           // Speed for auto-path movement
+                safeDistance: 0.26,       // Minimum distance from walls to prevent clipping
+                friction: 0.15,           // Velocity decay rate
+                rotationSpeed: 0.002,     // Mouse rotation speed
+                rotationLerpSpeed: 0.1    // Path-following rotation interpolation speed
             },
-            hard: {
-                mazeWidth: 350,
-                mazeHeight: 350,
-                fogDistance: 5,
-                directionBias: 0.4,
-                loopProbability: 0.25,  // High chance of loops
-                deadEndProbability: 0.5 // Many dead ends
+            lighting: {
+                ambientLightColor: 0xffffff,      // Color of ambient scene light
+                ambientLightIntensity: 0.5,       // Ambient light brightness
+                pointLightColor: 0xffffff,        // Color of player-following light
+                pointLightIntensity: 50,          // Point light brightness
+                pointLightDistance: 25,          // Point light reach distance
+                pointLightHeight: 2              // Height of point light above player
+            },
+            materials: {
+                neonColors: [0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa,
+                            0xff5500, 0x5500ff, 0xff0055, 0x00ff00, 0x0055ff], // Neon color palette
+                wallEmissiveIntensity: 0.5,      // Glow intensity for walls
+                wallShininess: 30,              // Wall reflectivity
+                floorCeilingEmissiveIntensity: 0.5, // Glow intensity for floor/ceiling
+                floorCeilingShininess: 10,      // Floor/ceiling reflectivity
+                startMarkerColor: 0x00ff00,     // Start marker color (green)
+                finishMarkerColor: 0xff0000,    // Finish marker color (red)
+                markerShininess: 150,          // Marker reflectivity
+                markerSize: 0.3,              // Size of start/finish markers
+                pathMarkerColor: 0x00ffff,    // Path debug marker color (cyan)
+                pathMarkerSize: 0.05         // Size of path debug markers
             }
         };
 
-        // Game configuration constants
-        const config = {
-            visibilityRadius: 15,      // Distance in cells for rendering walls around the player
-            cellSize: 2,              // Size of each maze cell in world units
-            wallThickness: 0.01,      // Thickness of walls, floor, and ceiling in world units
-            maxSpeed: 0.8,            // Maximum speed of manual player movement
-            pathSpeed: 0.8,           // Speed of automated path-following movement
-            safeDistance: 0.01 + 0.25, // Minimum distance from walls to prevent clipping (wallThickness + buffer)
-            friction: 0.15,           // Rate at which velocity decays when no input is given
-            rotationSpeed: 0.002,     // Speed of camera rotation with mouse movement
-            rotationLerpSpeed: 0.1    // Speed of camera rotation interpolation during path-following
-        };
+        class MazeGame {
+            constructor() {
+                // Core Three.js components
+                this.scene = new THREE.Scene();                    // Main 3D scene
+                this.camera = new THREE.PerspectiveCamera(75,      // Player camera
+                    window.innerWidth / window.innerHeight, 0.1, 1000);
+                this.renderer = new THREE.WebGLRenderer({ antialias: true }); // WebGL renderer
 
-        // Lighting configuration constants
-        const lightingConfig = {
-            ambientLightColor: 0xffffff,  // Color of ambient light illuminating the entire scene
-            ambientLightIntensity: 0.5,   // Intensity of ambient light (0 to 1 scale)
-            pointLightColor: 0xffffff,    // Color of the point light following the player
-            pointLightIntensity: 50,      // Intensity of the point light (affects brightness and reach)
-            pointLightDistance: 25,       // Maximum distance the point light affects (in world units)
-            pointLightHeight: 2           // Height above the player where the point light is positioned
-        };
+                // Game state
+                this.currentDifficulty = CONFIG.difficulty.easy;   // Current difficulty settings
+                this.maze = { data: [], vWalls: [], hWalls: [] };  // Maze structure (cells and walls)
+                this.walls = new Map();                           // Visible wall meshes
+                this.pathMarkers = [];                            // Debug path visualization markers
+                this.gameActive = false;                         // Game running state
+                this.startTime = 0;                             // Game start timestamp
+                this.score = 0;                                // Player score
+                this.velocity = new THREE.Vector3();           // Player movement velocity
+                this.path = null;                             // Current A* path (if active)
+                this.pathIndex = 0;                           // Current position in path
+                this.fogActive = true;                        // Fog enabled/disabled state
 
-        // Material and color configuration constants
-        const materialConfig = {
-            neonColors: [
-                0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa,
-                0xff5500, 0x5500ff, 0xff0055, 0x00ff00, 0x0055ff
-            ],                            // Array of neon colors for walls and floor/ceiling
-            wallEmissiveIntensity: 0.5,   // Emissive intensity for wall material (glow effect)
-            wallShininess: 30,            // Shininess of wall material for reflective highlights
-            floorCeilingEmissiveIntensity: 0.5, // Emissive intensity for floor/ceiling material
-            floorCeilingShininess: 10,    // Shininess of floor/ceiling material
-            startMarkerColor: 0x00ff00,   // Color of the start marker (green)
-            finishMarkerColor: 0xff0000,  // Color of the finish marker (red)
-            markerShininess: 150,         // Shininess of start/finish markers
-            markerSize: 0.3,              // Size of start/finish marker spheres
-            pathMarkerColor: 0x00ffff,    // Color of path debug markers (cyan)
-            pathMarkerSize: 0.05          // Size of path debug marker spheres
-        };
+                // Scene objects
+                this.wallMaterials = {};                      // Materials for walls and floor
+                this.start = { x: 0, z: 0 };                  // Start position coordinates
+                this.finish = { x: 0, z: 0 };                 // Finish position coordinates
+                this.floor = null;                           // Floor mesh
+                this.ceiling = null;                         // Ceiling mesh
+                this.startMarker = null;                     // Start marker mesh
+                this.finishMarker = null;                    // Finish marker mesh
+                this.pointLight = null;                      // Player-following light
 
-        let currentDifficulty = difficulties.easy;
-        let mazeWidth, mazeHeight;
-        let maze = [], walls = new Map(), floor, ceiling, startMarker, finishMarker;
-        let gameActive = false, startTime, score = 0;
-        let start = { x: 0, z: 0 }, finish;
-        let path = null, pathIndex = 0, pathMarkers = [];
-        let fogActive = true;
-        let fogColor = 0x111111;
+                // Input state
+                this.input = {                               // Keyboard/mouse input states
+                    forward: false, backward: false,
+                    left: false, right: false
+                };
+                this.touch = {                              // Touch input states
+                    active: false, startX: 0, startY: 0,
+                    lastX: 0, lastY: 0
+                };
 
-        let pointLight;
-        let wallMaterials = {};
+                // Collision detection
+                this.raycaster = new THREE.Raycaster();     // Raycaster for collision checking
 
-        function generateMaze() {
-            mazeWidth = currentDifficulty.mazeWidth;
-            mazeHeight = currentDifficulty.mazeHeight;
-            const loopProbability = currentDifficulty.loopProbability;
-            const deadEndProbability = currentDifficulty.deadEndProbability;
+                // Initialize components
+                this.setupRenderer();
+                this.setupEventListeners();
+                this.setupUI();
+            }
 
-            maze = [];
-            for (let x = 0; x < mazeWidth; x++) {
-                maze[x] = [];
-                for (let z = 0; z < mazeHeight; z++) {
-                    maze[x][z] = 0;
+            // Set up the WebGL renderer and handle window resizing
+            setupRenderer() {
+                this.renderer.setSize(window.innerWidth, window.innerHeight);
+                this.renderer.setPixelRatio(window.devicePixelRatio);
+                document.body.appendChild(this.renderer.domElement);
+
+                window.addEventListener('resize', () => {
+                    this.camera.aspect = window.innerWidth / window.innerHeight;
+                    this.camera.updateProjectionMatrix();
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+
+            // Set up all input event listeners
+            setupEventListeners() {
+                // Mouse movement for rotation
+                document.addEventListener('mousemove', (e) => {
+                    if (this.gameActive && !this.path)
+                        this.camera.rotation.y -= e.movementX * CONFIG.game.rotationSpeed;
+                });
+
+                // Click to lock pointer
+                document.addEventListener('click', () => {
+                    if (this.gameActive && !this.path)
+                        document.body.requestPointerLock();
+                });
+
+                // Touch controls
+                document.addEventListener('touchstart', (e) => this.handleTouchStart(e));
+                document.addEventListener('touchmove', (e) => this.handleTouchMove(e));
+                document.addEventListener('touchend', () => this.handleTouchEnd());
+
+                // Keyboard controls
+                document.addEventListener('keydown', (e) => this.handleKeyDown(e));
+                document.addEventListener('keyup', (e) => this.handleKeyUp(e));
+            }
+
+            // Initialize UI elements and event listeners
+            setupUI() {
+                this.uiElement = document.getElementById('ui');              // Score/time display
+                this.achievementElement = document.getElementById('achievementElement'); // Completion message
+                this.restartButton = document.getElementById('restartButton'); // Restart button
+                this.menu = document.getElementById('menu');                 // Difficulty menu
+
+                // Add click/touch handlers for UI interaction
+                [this.achievementElement, this.restartButton].forEach(el => {
+                    el.addEventListener('click', () => this.handleUIInteraction(el));
+                    el.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        this.handleUIInteraction(el);
+                    });
+                });
+
+                this.setupMenu();
+                this.showMenu();
+            }
+
+            // Create difficulty selection menu
+            setupMenu() {
+                this.menu.innerHTML = '';
+                Object.keys(CONFIG.difficulty).forEach(key => {
+                    const button = document.createElement('div');
+                    button.className = 'menu-button';
+                    button.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+                    button.addEventListener('click', () => this.startGame(key));
+                    button.addEventListener('touchstart', (e) => {
+                        e.preventDefault();
+                        this.startGame(key);
+                    });
+                    this.menu.appendChild(button);
+                });
+            }
+
+            // Show the difficulty selection menu
+            showMenu() {
+                this.menu.style.display = 'flex';
+                this.gameActive = false;
+            }
+
+            // Hide the difficulty selection menu
+            hideMenu() {
+                this.menu.style.display = 'none';
+            }
+
+            // Generate a new maze using recursive backtracking
+            generateMaze() {
+                const { mazeWidth, mazeHeight, loopProbability, deadEndProbability, directionBias } = this.currentDifficulty;
+
+                // Initialize maze arrays
+                this.maze.data = Array(mazeWidth).fill().map(() => Array(mazeHeight).fill(0));
+                this.maze.vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
+                this.maze.hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
+
+                // Possible movement directions
+                const directions = [
+                    { dx: 1, dz: 0, wall: 'v', wx: 1, wz: 0 },  // East
+                    { dx: -1, dz: 0, wall: 'v', wx: 0, wz: 0 }, // West
+                    { dx: 0, dz: 1, wall: 'h', wx: 0, wz: 1 },  // South
+                    { dx: 0, dz: -1, wall: 'h', wx: 0, wz: 0 }  // North
+                ];
+
+                const stack = [{ x: 0, z: 0 }];
+                const visited = new Set(['0,0']);
+                this.maze.data[0][0] = 1;
+
+                // Generate maze paths
+                while (stack.length) {
+                    const current = stack[stack.length - 1];
+                    const neighbors = this.getUnvisitedNeighbors(current, visited, directions, directionBias);
+
+                    if (neighbors.length) {
+                        const dir = neighbors[Math.floor(Math.random() * neighbors.length)];
+                        const nx = current.x + dir.dx;
+                        const nz = current.z + dir.dz;
+                        const wx = current.x + dir.wx;
+                        const wz = current.z + dir.wz;
+
+                        // Remove wall between current and next cell
+                        if (dir.wall === 'v') this.maze.vWalls[wx][wz] = false;
+                        else this.maze.hWalls[wx][wz] = false;
+
+                        this.maze.data[nx][nz] = 1;
+                        visited.add(`${nx},${nz}`);
+                        stack.push({ x: nx, z: nz });
+
+                        // Add dead ends occasionally
+                        if (Math.random() < deadEndProbability && neighbors.length > 1) {
+                            const extraDir = neighbors[Math.floor(Math.random() * (neighbors.length - 1))];
+                            if (extraDir !== dir) this.addDeadEnd(current, extraDir, visited);
+                        }
+                    } else {
+                        stack.pop();
+                    }
                 }
+
+                this.addLoops(mazeWidth, mazeHeight, loopProbability);
+                this.finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
             }
 
-            let vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
-            let hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
+            // Get unvisited neighboring cells
+            getUnvisitedNeighbors(current, visited, directions, bias) {
+                const neighbors = [];
+                const shuffled = this.shuffleDirections([...directions], bias);
+                for (const dir of shuffled) {
+                    const nx = current.x + dir.dx;
+                    const nz = current.z + dir.dz;
+                    if (nx >= 0 && nx < this.currentDifficulty.mazeWidth &&
+                        nz >= 0 && nz < this.currentDifficulty.mazeHeight &&
+                        !visited.has(`${nx},${nz}`)) {
+                        neighbors.push(dir);
+                    }
+                }
+                return neighbors;
+            }
 
-            const directions = [
-                { dx: 1, dz: 0, wall: 'v', wx: 1, wz: 0 },
-                { dx: -1, dz: 0, wall: 'v', wx: 0, wz: 0 },
-                { dx: 0, dz: 1, wall: 'h', wx: 0, wz: 1 },
-                { dx: 0, dz: -1, wall: 'h', wx: 0, wz: 0 }
-            ];
-
-            function shuffleDirections(arr, bias) {
+            // Shuffle direction array with bias
+            shuffleDirections(arr, bias) {
                 if (bias < 0.5) {
                     arr.sort(() => Math.random() - bias);
                 } else {
@@ -225,679 +364,649 @@
                 return arr;
             }
 
-            const stack = [{ x: 0, z: 0 }];
-            const visited = new Set();
-            visited.add("0,0");
-            maze[0][0] = 1;
+            // Add a dead-end path from current position
+            addDeadEnd(current, dir, visited) {
+                const ex = current.x + dir.dx;
+                const ez = current.z + dir.dz;
+                const ewx = current.x + dir.wx;
+                const ewz = current.z + dir.wz;
+                if (ex >= 0 && ex < this.currentDifficulty.mazeWidth &&
+                    ez >= 0 && ez < this.currentDifficulty.mazeHeight &&
+                    !visited.has(`${ex},${ez}`)) {
+                    if (dir.wall === 'v') this.maze.vWalls[ewx][ewz] = false;
+                    else this.maze.hWalls[ewx][ewz] = false;
+                    this.maze.data[ex][ez] = 1;
+                    visited.add(`${ex},${ez}`);
+                }
+            }
 
-            while (stack.length > 0) {
-                const current = stack[stack.length - 1];
-                const { x, z } = current;
+            // Add random loops to the maze
+            addLoops(width, height, probability) {
+                for (let x = 0; x < width; x++) {
+                    for (let z = 0; z < height; z++) {
+                        if (Math.random() < probability) {
+                            if (x < width - 1 && Math.random() < 0.5) this.maze.vWalls[x + 1][z] = false;
+                            if (z < height - 1 && Math.random() < 0.5) this.maze.hWalls[x][z + 1] = false;
+                        }
+                    }
+                }
+            }
 
-                const neighbors = [];
-                const shuffledDirections = shuffleDirections([...directions], currentDifficulty.directionBias);
+            // Set up the 3D scene with all objects
+            setupScene() {
+                this.scene.clear();
+                this.walls.clear();
 
-                for (const dir of shuffledDirections) {
-                    const nx = x + dir.dx;
-                    const nz = z + dir.dz;
-                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && !visited.has(`${nx},${nz}`)) {
-                        neighbors.push(dir);
+                // Randomly select neon colors
+                const wallColor = CONFIG.materials.neonColors[Math.floor(Math.random() * CONFIG.materials.neonColors.length)];
+                const availableFloorColors = CONFIG.materials.neonColors.filter(color => color !== wallColor);
+                const floorColor = availableFloorColors[Math.floor(Math.random() * availableFloorColors.length)];
+
+                // Create materials
+                this.wallMaterials = {
+                    wall: new THREE.MeshPhongMaterial({
+                        color: wallColor,
+                        emissive: wallColor,
+                        emissiveIntensity: CONFIG.materials.wallEmissiveIntensity,
+                        shininess: CONFIG.materials.wallShininess,
+                        side: THREE.DoubleSide
+                    }),
+                    floorCeiling: new THREE.MeshPhongMaterial({
+                        color: floorColor,
+                        emissive: floorColor,
+                        emissiveIntensity: CONFIG.materials.floorCeilingEmissiveIntensity,
+                        shininess: CONFIG.materials.floorCeilingShininess,
+                        side: THREE.DoubleSide
+                    })
+                };
+
+                this.addFloorAndCeiling();
+                this.addMarkers();
+                this.addLighting();
+                this.updateFog(0x111111);
+                this.setupCamera();
+            }
+
+            // Add floor and ceiling to the scene
+            addFloorAndCeiling() {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const floorGeometry = new THREE.BoxGeometry(
+                    mazeWidth * CONFIG.game.cellSize,
+                    CONFIG.game.wallThickness,
+                    mazeHeight * CONFIG.game.cellSize
+                );
+                this.floor = new THREE.Mesh(floorGeometry, this.wallMaterials.floorCeiling);
+                this.floor.position.set(0, -CONFIG.game.cellSize / 2 + CONFIG.game.wallThickness / 2, 0);
+                this.scene.add(this.floor);
+
+                const ceilingGeometry = new THREE.BoxGeometry(
+                    mazeWidth * CONFIG.game.cellSize,
+                    CONFIG.game.wallThickness,
+                    mazeHeight * CONFIG.game.cellSize
+                );
+                this.ceiling = new THREE.Mesh(ceilingGeometry, this.wallMaterials.floorCeiling);
+                this.ceiling.position.set(0, CONFIG.game.cellSize / 2 - CONFIG.game.wallThickness / 2, 0);
+                this.scene.add(this.ceiling);
+            }
+
+            // Add start and finish markers
+            addMarkers() {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const markerGeometry = new THREE.SphereGeometry(CONFIG.materials.markerSize);
+
+                this.startMarker = new THREE.Mesh(
+                    markerGeometry,
+                    new THREE.MeshPhongMaterial({
+                        color: CONFIG.materials.startMarkerColor,
+                        shininess: CONFIG.materials.markerShininess
+                    })
+                );
+                const startX = this.start.x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                const startZ = this.start.z * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                this.startMarker.position.set(startX, 0, startZ);
+                this.scene.add(this.startMarker);
+
+                this.finishMarker = new THREE.Mesh(
+                    markerGeometry,
+                    new THREE.MeshPhongMaterial({
+                        color: CONFIG.materials.finishMarkerColor,
+                        shininess: CONFIG.materials.markerShininess
+                    })
+                );
+                const finishX = this.finish.x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                const finishZ = this.finish.z * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                this.finishMarker.position.set(finishX, 0, finishZ);
+                this.scene.add(this.finishMarker);
+            }
+
+            // Add lighting to the scene
+            addLighting() {
+                const ambientLight = new THREE.AmbientLight(
+                    CONFIG.lighting.ambientLightColor,
+                    CONFIG.lighting.ambientLightIntensity
+                );
+                this.scene.add(ambientLight);
+                this.pointLight = new THREE.PointLight(
+                    CONFIG.lighting.pointLightColor,
+                    CONFIG.lighting.pointLightIntensity,
+                    CONFIG.lighting.pointLightDistance
+                );
+                this.pointLight.position.set(this.camera.position.x, CONFIG.lighting.pointLightHeight, this.camera.position.z);
+                this.scene.add(this.pointLight);
+            }
+
+            // Position and orient camera at start
+            setupCamera() {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const startX = this.start.x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                const startZ = this.start.z * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                this.camera.position.set(startX, 0.1, startZ);
+
+                const directions = [
+                    { name: 'East', dx: 1, dz: 0, yaw: -Math.PI / 2 },
+                    { name: 'South', dx: 0, dz: 1, yaw: -Math.PI },
+                    { name: 'North', dx: 0, dz: -1, yaw: 0 },
+                    { name: 'West', dx: -1, dz: 0, yaw: Math.PI / 2 }
+                ];
+
+                // Face an open direction at start
+                for (const dir of directions) {
+                    const nx = this.start.x + dir.dx;
+                    const nz = this.start.z + dir.dz;
+                    let isOpen = false;
+
+                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
+                        if (dir.dx === 1 && !this.maze.vWalls[1][0]) isOpen = true;
+                        else if (dir.dx === -1 && !this.maze.vWalls[0][0]) isOpen = true;
+                        else if (dir.dz === 1 && !this.maze.hWalls[0][1]) isOpen = true;
+                        else if (dir.dz === -1 && !this.maze.hWalls[0][0]) isOpen = true;
+                    }
+
+                    if (isOpen) {
+                        this.camera.rotation.y = dir.yaw;
+                        break;
+                    }
+                }
+            }
+
+            // Update visible walls based on player position
+            updateVisibleWalls() {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const playerX = Math.floor((this.camera.position.x + mazeWidth * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize);
+                const playerZ = Math.floor((this.camera.position.z + mazeHeight * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize);
+
+                const minX = Math.max(0, playerX - CONFIG.game.visibilityRadius);
+                const maxX = Math.min(mazeWidth, playerX + CONFIG.game.visibilityRadius);
+                const minZ = Math.max(0, playerZ - CONFIG.game.visibilityRadius);
+                const maxZ = Math.min(mazeHeight, playerZ + CONFIG.game.visibilityRadius);
+
+                const newWalls = new Set();
+
+                // Vertical walls
+                for (let x = minX; x <= maxX; x++) {
+                    for (let z = minZ; z < maxZ; z++) {
+                        if (this.maze.vWalls[x][z]) {
+                            let startZ = z;
+                            let length = 0;
+                            while (startZ + length < mazeHeight && this.maze.vWalls[x][startZ + length] && startZ + length < maxZ) length++;
+                            const key = `v_${x}_${startZ}_${length}`;
+                            newWalls.add(key);
+                            if (!this.walls.has(key)) this.addVerticalWall(x, startZ, length);
+                            z += length - 1;
+                        }
                     }
                 }
 
-                if (neighbors.length > 0) {
-                    const dir = neighbors[Math.floor(Math.random() * neighbors.length)];
-                    const nx = x + dir.dx;
-                    const nz = z + dir.dz;
-                    const wx = x + dir.wx;
-                    const wz = z + dir.wz;
-
-                    if (dir.wall === 'v') vWalls[wx][wz] = false;
-                    else if (dir.wall === 'h') hWalls[wx][wz] = false;
-
-                    maze[nx][nz] = 1;
-                    visited.add(`${nx},${nz}`);
-                    stack.push({ x: nx, z: nz });
-
-                    // Add dead-end paths with probability
-                    if (Math.random() < deadEndProbability && neighbors.length > 1) {
-                        const extraDir = neighbors[Math.floor(Math.random() * (neighbors.length - 1))];
-                        if (extraDir !== dir) {
-                            const ex = x + extraDir.dx;
-                            const ez = z + extraDir.dz;
-                            const ewx = x + extraDir.wx;
-                            const ewz = z + extraDir.wz;
-                            if (ex >= 0 && ex < mazeWidth && ez >= 0 && ez < mazeHeight && !visited.has(`${ex},${ez}`)) {
-                                if (extraDir.wall === 'v') vWalls[ewx][ewz] = false;
-                                else if (extraDir.wall === 'h') hWalls[ewx][ewz] = false;
-                                maze[ex][ez] = 1;
-                                visited.add(`${ex},${ez}`);
-                            }
+                // Horizontal walls
+                for (let z = minZ; z <= maxZ; z++) {
+                    for (let x = minX; x < maxX; x++) {
+                        if (this.maze.hWalls[x][z]) {
+                            let startX = x;
+                            let length = 0;
+                            while (startX + length < mazeWidth && this.maze.hWalls[startX + length][z] && startX + length < maxX) length++;
+                            const key = `h_${startX}_${z}_${length}`;
+                            newWalls.add(key);
+                            if (!this.walls.has(key)) this.addHorizontalWall(startX, z, length);
+                            x += length - 1;
                         }
                     }
+                }
+
+                // Remove walls outside visibility range
+                for (const [key, wall] of this.walls) {
+                    if (!newWalls.has(key)) {
+                        this.scene.remove(wall.mesh);
+                        this.walls.delete(key);
+                    }
+                }
+            }
+
+            // Add a vertical wall segment
+            addVerticalWall(x, z, length) {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const geometry = new THREE.BoxGeometry(CONFIG.game.wallThickness, CONFIG.game.cellSize, CONFIG.game.cellSize * length);
+                const wall = new THREE.Mesh(geometry, this.wallMaterials.wall);
+                const posX = x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2;
+                const posZ = (z + (length - 1) / 2) * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                wall.position.set(posX, 0, posZ);
+                this.scene.add(wall);
+                this.walls.set(`v_${x}_${z}_${length}`, { mesh: wall, x, z, length, isVertical: true });
+            }
+
+            // Add a horizontal wall segment
+            addHorizontalWall(x, z, length) {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const geometry = new THREE.BoxGeometry(CONFIG.game.cellSize * length, CONFIG.game.cellSize, CONFIG.game.wallThickness);
+                const wall = new THREE.Mesh(geometry, this.wallMaterials.wall);
+                const posX = (x + (length - 1) / 2) * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                const posZ = z * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2;
+                wall.position.set(posX, 0, posZ);
+                this.scene.add(wall);
+                this.walls.set(`h_${x}_${z}_${length}`, { mesh: wall, x, z, length, isVertical: false });
+            }
+
+            // Main animation loop
+            animate() {
+                if (!this.gameActive) return;
+                requestAnimationFrame(() => this.animate());
+
+                this.updateVisibleWalls();
+                this.updateMovement();
+                this.updateMarkers();
+                this.updateUI();
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            // Update player movement and game state
+            updateMovement() {
+                this.pointLight.position.set(this.camera.position.x, CONFIG.lighting.pointLightHeight, this.camera.position.z);
+
+                if (this.path && this.pathIndex < this.path.length) {
+                    this.followPath();
                 } else {
-                    stack.pop();
+                    this.handleManualMovement();
+                }
+
+                // Check for finish condition
+                const distanceToFinish = this.camera.position.distanceTo(this.finishMarker.position);
+                if (distanceToFinish < 0.5) {
+                    this.showAchievement();
+                } else if (distanceToFinish < 2) {
+                    this.finishMarker.scale.lerp(new THREE.Vector3(1.2, 1.2, 1.2), 0.1);
+                } else {
+                    this.finishMarker.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
                 }
             }
 
-            // Add loops by removing additional walls
-            for (let x = 0; x < mazeWidth; x++) {
-                for (let z = 0; z < mazeHeight; z++) {
-                    if (Math.random() < loopProbability) {
-                        if (x < mazeWidth - 1 && Math.random() < 0.5) {
-                            vWalls[x + 1][z] = false; // Remove vertical wall
-                        }
-                        if (z < mazeHeight - 1 && Math.random() < 0.5) {
-                            hWalls[x][z + 1] = false; // Remove horizontal wall
-                        }
-                    }
-                }
-            }
+            // Follow the A* generated path
+            followPath() {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const targetGrid = this.path[this.pathIndex];
+                const targetX = targetGrid.x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                const targetZ = targetGrid.z * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
+                const direction = new THREE.Vector3(targetX - this.camera.position.x, 0, targetZ - this.camera.position.z).normalize();
 
-            maze.vWalls = vWalls;
-            maze.hWalls = hWalls;
-            finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
-        }
-
-        function renderMaze() {
-            const wallColor = materialConfig.neonColors[Math.floor(Math.random() * materialConfig.neonColors.length)];
-            const availableFloorColors = materialConfig.neonColors.filter(color => color !== wallColor);
-            const floorCeilingColor = availableFloorColors[Math.floor(Math.random() * availableFloorColors.length)];
-
-            wallMaterials.wall = new THREE.MeshPhongMaterial({
-                color: wallColor,
-                emissive: wallColor,
-                emissiveIntensity: materialConfig.wallEmissiveIntensity,
-                shininess: materialConfig.wallShininess,
-                opacity: 1.0,
-                transparent: false,
-                side: THREE.DoubleSide
-            });
-            wallMaterials.floorCeiling = new THREE.MeshPhongMaterial({
-                color: floorCeilingColor,
-                emissive: floorCeilingColor,
-                emissiveIntensity: materialConfig.floorCeilingEmissiveIntensity,
-                shininess: materialConfig.floorCeilingShininess,
-                opacity: 1.0,
-                transparent: false,
-                side: THREE.DoubleSide
-            });
-
-            walls.clear();
-
-            const floorGeometry = new THREE.BoxGeometry(mazeWidth * config.cellSize, config.wallThickness, mazeHeight * config.cellSize);
-            floor = new THREE.Mesh(floorGeometry, wallMaterials.floorCeiling);
-            floor.position.set(0, -config.cellSize / 2 + config.wallThickness / 2, 0);
-            scene.add(floor);
-
-            const ceilingGeometry = new THREE.BoxGeometry(mazeWidth * config.cellSize, config.wallThickness, mazeHeight * config.cellSize);
-            ceiling = new THREE.Mesh(ceilingGeometry, wallMaterials.floorCeiling);
-            ceiling.position.set(0, config.cellSize / 2 - config.wallThickness / 2, 0);
-            scene.add(ceiling);
-
-            const startMarkerGeometry = new THREE.SphereGeometry(materialConfig.markerSize);
-            const startMarkerMaterial = new THREE.MeshPhongMaterial({
-                color: materialConfig.startMarkerColor,
-                shininess: materialConfig.markerShininess
-            });
-            startMarker = new THREE.Mesh(startMarkerGeometry, startMarkerMaterial);
-            const startX = start.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
-            const startZ = start.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
-            startMarker.position.set(startX, 0, startZ);
-            scene.add(startMarker);
-
-            const finishMarkerGeometry = new THREE.SphereGeometry(materialConfig.markerSize);
-            const finishMarkerMaterial = new THREE.MeshPhongMaterial({
-                color: materialConfig.finishMarkerColor,
-                shininess: materialConfig.markerShininess
-            });
-            finishMarker = new THREE.Mesh(finishMarkerGeometry, finishMarkerMaterial);
-            const finishX = finish.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
-            const finishZ = finish.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
-            finishMarker.position.set(finishX, 0, finishZ);
-            scene.add(finishMarker);
-
-            const ambientLight = new THREE.AmbientLight(lightingConfig.ambientLightColor, lightingConfig.ambientLightIntensity);
-            scene.add(ambientLight);
-            pointLight = new THREE.PointLight(lightingConfig.pointLightColor, lightingConfig.pointLightIntensity, lightingConfig.pointLightDistance);
-            pointLight.position.set(startX, lightingConfig.pointLightHeight, startZ);
-            scene.add(pointLight);
-
-            scene.fog = null;
-            updateFog(fogColor);
-
-            camera.position.set(startX, 0.1, startZ);
-
-            const directions = [
-                { name: 'East', dx: 1, dz: 0, yaw: -Math.PI / 2 },
-                { name: 'South', dx: 0, dz: 1, yaw: -Math.PI },
-                { name: 'North', dx: 0, dz: -1, yaw: 0 },
-                { name: 'West', dx: -1, dz: 0, yaw: Math.PI / 2 }
-            ];
-
-            let openDirectionFound = false;
-            console.log("Checking directions from start (0, 0):");
-            for (const dir of directions) {
-                const nx = start.x + dir.dx;
-                const nz = start.z + dir.dz;
-                let isOpen = false;
-
-                if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
-                    if (dir.dx === 1 && !maze.vWalls[1][0]) isOpen = true;
-                    else if (dir.dx === -1 && !maze.vWalls[0][0]) isOpen = true;
-                    else if (dir.dz === 1 && !maze.hWalls[0][1]) isOpen = true;
-                    else if (dir.dz === -1 && !maze.hWalls[0][0]) isOpen = true;
-                }
-
-                console.log(`${dir.name}: Adjacent (${nx}, ${nz}), Open: ${isOpen}, vWalls[1][0]: ${maze.vWalls[1][0]}, hWalls[0][1]: ${maze.hWalls[0][1]}, vWalls[0][0]: ${maze.vWalls[0][0]}, hWalls[0][0]: ${maze.hWalls[0][0]}`);
-
-                if (isOpen) {
-                    camera.rotation.y = dir.yaw;
-                    console.log(`Set to face ${dir.name} (yaw: ${dir.yaw})`);
-                    openDirectionFound = true;
-                    break;
-                }
-            }
-
-            if (!openDirectionFound) {
-                console.warn("No open direction found! Defaulting to East (yaw: -π/2)");
-                camera.rotation.y = -Math.PI / 2;
-            }
-
-            gameActive = true;
-        }
-
-        function updateVisibleObjects() {
-            const playerX = Math.floor((camera.position.x + mazeWidth * config.cellSize / 2) / config.cellSize);
-            const playerZ = Math.floor((camera.position.z + mazeHeight * config.cellSize / 2) / config.cellSize);
-
-            const minX = Math.max(0, playerX - config.visibilityRadius);
-            const maxX = Math.min(mazeWidth, playerX + config.visibilityRadius);
-            const minZ = Math.max(0, playerZ - config.visibilityRadius);
-            const maxZ = Math.min(mazeHeight, playerZ + config.visibilityRadius);
-
-            const newWalls = new Set();
-
-            for (let x = minX; x <= maxX; x++) {
-                for (let z = minZ; z < maxZ; z++) {
-                    if (maze.vWalls[x][z]) {
-                        let startZ = z;
-                        let length = 0;
-                        while (startZ + length < mazeHeight && maze.vWalls[x][startZ + length] && startZ + length < maxZ) {
-                            length++;
-                        }
-                        const key = `v_${x}_${startZ}_${length}`;
-                        newWalls.add(key);
-                        if (!walls.has(key)) {
-                            const geometry = new THREE.BoxGeometry(config.wallThickness, config.cellSize, config.cellSize * length);
-                            const wall = new THREE.Mesh(geometry, wallMaterials.wall);
-                            const posX = x * config.cellSize - mazeWidth * config.cellSize / 2;
-                            const posZ = (startZ + (length - 1) / 2) * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
-                            wall.position.set(posX, 0, posZ);
-                            scene.add(wall);
-                            walls.set(key, { mesh: wall, x: x, z: startZ, length: length, isVertical: true });
-                        }
-                        z += length - 1;
-                    }
-                }
-            }
-
-            for (let z = minZ; z <= maxZ; z++) {
-                for (let x = minX; x < maxX; x++) {
-                    if (maze.hWalls[x][z]) {
-                        let startX = x;
-                        let length = 0;
-                        while (startX + length < mazeWidth && maze.hWalls[startX + length][z] && startX + length < maxX) {
-                            length++;
-                        }
-                        const key = `h_${startX}_${z}_${length}`;
-                        newWalls.add(key);
-                        if (!walls.has(key)) {
-                            const geometry = new THREE.BoxGeometry(config.cellSize * length, config.cellSize, config.wallThickness);
-                            const wall = new THREE.Mesh(geometry, wallMaterials.wall);
-                            const posX = (startX + (length - 1) / 2) * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
-                            const posZ = z * config.cellSize - mazeHeight * config.cellSize / 2;
-                            wall.position.set(posX, 0, posZ);
-                            scene.add(wall);
-                            walls.set(key, { mesh: wall, x: startX, z: z, length: length, isVertical: false });
-                        }
-                        x += length - 1;
-                    }
-                }
-            }
-
-            for (let [key, wall] of walls) {
-                if (!newWalls.has(key)) {
-                    scene.remove(wall.mesh);
-                    walls.delete(key);
-                }
-            }
-        }
-
-        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        let velocity = new THREE.Vector3(0, 0, 0);
-        const raycaster = new THREE.Raycaster();
-
-        document.addEventListener('mousemove', (e) => {
-            if (gameActive && !path) camera.rotation.y -= e.movementX * config.rotationSpeed;
-        });
-        document.body.requestPointerLock = document.body.requestPointerLock || document.body.mozRequestPointerLock;
-        document.addEventListener('click', () => {
-            if (gameActive && !path) document.body.requestPointerLock();
-        });
-
-        let touchActive = false;
-        let touchStartX = 0, touchStartY = 0;
-        let lastTouchX = 0, lastTouchY = 0;
-
-        document.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1 && gameActive && !path) {
-                touchActive = true;
-                touchStartX = e.touches[0].clientX;
-                touchStartY = e.touches[0].clientY;
-                lastTouchX = touchStartX;
-                lastTouchY = touchStartY;
-                moveForward = false;
-            }
-        });
-
-        document.addEventListener('touchmove', (e) => {
-            if (touchActive && e.touches.length === 1 && gameActive && !path) {
-                const touchX = e.touches[0].clientX;
-                const touchY = e.touches[0].clientY;
-                const deltaX = touchX - lastTouchX;
-                const deltaY = touchY - touchStartY;
-
-                if (deltaY < -50) {
-                    moveForward = true;
-                }
-
-                const rotationDelta = deltaX * 0.008;
-                camera.rotation.y -= rotationDelta;
-
-                lastTouchX = touchX;
-                lastTouchY = touchY;
-            }
-        });
-
-        document.addEventListener('touchend', () => {
-            if (gameActive && !path) {
-                touchActive = false;
-                moveForward = false;
-            }
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (gameActive) {
-                switch (e.key.toLowerCase()) {
-                    case 'w': if (!path) moveForward = true; break;
-                    case 's': if (!path) moveBackward = true; break;
-                    case 'a': if (!path) moveLeft = true; break;
-                    case 'd': if (!path) moveRight = true; break;
-                    case 't':
-                        if (path) {
-                            path = null;
-                            velocity.set(0, 0, 0);
-                            renderPathMarkers();
-                        } else {
-                            const startX = Math.floor((camera.position.x + mazeWidth * config.cellSize / 2) / config.cellSize);
-                            const startZ = Math.floor((camera.position.z + mazeHeight * config.cellSize / 2) / config.cellSize);
-                            path = aStarPathfinding({ x: startX, z: startZ }, finish);
-                            pathIndex = 0;
-                            moveForward = moveBackward = moveLeft = moveRight = false;
-                            velocity.set(0, 0, 0);
-                            renderPathMarkers();
-                        }
-                        break;
-                    case 'p':
-                        document.body.classList.toggle('debug-path');
-                        renderPathMarkers();
-                        break;
-                    case 'f':
-                        fogActive = !fogActive;
-                        updateFog(fogColor);
-                        break;
-                }
-            } else if (e.key === ' ' && achievementElement.style.display === 'block') {
-                restartGame();
-            }
-        });
-
-        document.addEventListener('keyup', (e) => {
-            if (gameActive && !path) {
-                switch (e.key.toLowerCase()) {
-                    case 'w': moveForward = false; break;
-                    case 's': moveBackward = false; break;
-                    case 'a': moveLeft = false; break;
-                    case 'd': moveRight = false; break;
-                }
-            }
-        });
-
-        const uiElement = document.getElementById('ui');
-        const achievementElement = document.getElementById('achievementElement');
-        const restartButton = document.getElementById('restartButton');
-        const menu = document.getElementById('menu');
-
-        function setupMenu() {
-            menu.innerHTML = '';
-            Object.keys(difficulties).forEach(difficultyKey => {
-                const button = document.createElement('div');
-                button.className = 'menu-button';
-                button.textContent = difficultyKey.charAt(0).toUpperCase() + difficultyKey.slice(1);
-                button.addEventListener('click', () => startGame(difficultyKey));
-                button.addEventListener('touchstart', (e) => {
-                    e.preventDefault();
-                    startGame(difficultyKey);
-                });
-                menu.appendChild(button);
-            });
-        }
-
-        function showMenu() {
-            menu.style.display = 'flex';
-            gameActive = false;
-        }
-
-        function hideMenu() {
-            menu.style.display = 'none';
-        }
-
-        [achievementElement, restartButton].forEach(element => {
-            element.addEventListener('touchstart', (e) => { e.preventDefault(); handleTouchEvent(element); });
-            element.addEventListener('click', (e) => { e.preventDefault(); handleTouchEvent(element); });
-        });
-
-        function handleTouchEvent(element) {
-            if (element === achievementElement || element === restartButton) {
-                if (!gameActive) restartGame();
-            }
-        }
-
-        function startGame(difficultyKey) {
-            currentDifficulty = difficulties[difficultyKey];
-            console.log(`Starting game with difficulty: ${difficultyKey}...`);
-            hideMenu();
-            gameActive = true;
-            startTime = performance.now();
-            score = 0;
-            path = null;
-            velocity.set(0, 0, 0);
-            moveForward = moveBackward = moveLeft = moveRight = false;
-            updateUI();
-            generateMaze();
-            renderMaze();
-            animate();
-        }
-
-        function showAchievement() {
-            achievementElement.style.display = 'block';
-            restartButton.style.display = 'block';
-            gameActive = false;
-            path = null;
-            const timeTaken = Math.floor((performance.now() - startTime) / 1000);
-            score = Math.max(0, 1000 - timeTaken * 10);
-            updateUI();
-        }
-
-        function restartGame() {
-            scene.clear();
-            walls.clear();
-            maze = [];
-            start = { x: 0, z: 0 };
-            gameActive = true;
-            startTime = performance.now();
-            path = null;
-            velocity.set(0, 0, 0);
-            moveForward = moveBackward = moveLeft = moveRight = false;
-            pathMarkers.forEach(marker => scene.remove(marker));
-            pathMarkers = [];
-            showMenu();
-            achievementElement.style.display = 'none';
-            restartButton.style.display = 'none';
-        }
-
-        function updateFog(color) {
-            if (fogActive) {
-                scene.fog = new THREE.Fog(color, 1, currentDifficulty.fogDistance);
-            } else {
-                scene.fog = null;
-            }
-        }
-
-        function updateUI() {
-            if (gameActive) {
-                const timeElapsed = Math.floor((performance.now() - startTime) / 1000);
-                uiElement.textContent = `Score: ${score} | Time: ${timeElapsed}s`;
-            }
-        }
-
-        function renderPathMarkers() {
-            pathMarkers.forEach(marker => scene.remove(marker));
-            pathMarkers = [];
-            if (path && document.body.classList.contains('debug-path')) {
-                path.forEach(node => {
-                    const marker = new THREE.Mesh(
-                        new THREE.SphereGeometry(materialConfig.pathMarkerSize),
-                        new THREE.MeshBasicMaterial({ color: materialConfig.pathMarkerColor })
-                    );
-                    marker.position.set(
-                        node.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2,
-                        0,
-                        node.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2
-                    );
-                    scene.add(marker);
-                    pathMarkers.push(marker);
-                });
-            }
-        }
-
-        function aStarPathfinding(startPos, endPos) {
-            const openSet = [startPos];
-            const cameFrom = new Map();
-            const gScore = new Map();
-            const fScore = new Map();
-
-            gScore.set(`${startPos.x},${startPos.z}`, 0);
-            fScore.set(`${startPos.x},${startPos.z}`, heuristic(startPos, endPos));
-
-            while (openSet.length > 0) {
-                openSet.sort((a, b) => fScore.get(`${a.x},${a.z}`) - fScore.get(`${b.x},${b.z}`));
-                const current = openSet.shift();
-
-                if (current.x === endPos.x && current.z === endPos.z) {
-                    return reconstructPath(cameFrom, current);
-                }
-
-                const neighbors = getNeighbors(current);
-                for (const neighbor of neighbors) {
-                    const tentativeGScore = gScore.get(`${current.x},${current.z}`) + 1;
-                    const neighborKey = `${neighbor.x},${neighbor.z}`;
-
-                    if (!gScore.has(neighborKey) || tentativeGScore < gScore.get(neighborKey)) {
-                        cameFrom.set(neighborKey, current);
-                        gScore.set(neighborKey, tentativeGScore);
-                        fScore.set(neighborKey, tentativeGScore + heuristic(neighbor, endPos));
-                        if (!openSet.some(n => n.x === neighbor.x && n.z === neighbor.z)) {
-                            openSet.push(neighbor);
-                        }
-                    }
-                }
-            }
-            return null;
-        }
-
-        function heuristic(a, b) {
-            return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
-        }
-
-        function getNeighbors(pos) {
-            const neighbors = [];
-            const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
-            for (const [dx, dz] of directions) {
-                const nx = pos.x + dx;
-                const nz = pos.z + dz;
-                if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
-                    if (dx === 1 && !maze.vWalls[pos.x + 1][pos.z]) neighbors.push({ x: nx, z: nz });
-                    else if (dx === -1 && !maze.vWalls[pos.x][pos.z]) neighbors.push({ x: nx, z: nz });
-                    else if (dz === 1 && !maze.hWalls[pos.x][pos.z + 1]) neighbors.push({ x: nx, z: nz });
-                    else if (dz === -1 && !maze.hWalls[pos.x][pos.z]) neighbors.push({ x: nx, z: nz });
-                }
-            }
-            return neighbors;
-        }
-
-        function reconstructPath(cameFrom, current) {
-            const path = [current];
-            while (cameFrom.has(`${current.x},${current.z}`)) {
-                current = cameFrom.get(`${current.x},${current.z}`);
-                path.unshift(current);
-            }
-            return path;
-        }
-
-        function animate() {
-            if (!gameActive) return;
-
-            requestAnimationFrame(animate);
-
-            updateVisibleObjects();
-            const wallMeshes = Array.from(walls.values()).map(w => w.mesh);
-
-            const startDist = camera.position.distanceTo(startMarker.position);
-            startMarker.visible = startDist <= config.visibilityRadius * config.cellSize;
-            const finishDist = camera.position.distanceTo(finishMarker.position);
-            finishMarker.visible = finishDist <= config.visibilityRadius * config.cellSize;
-
-            const startX = camera.position.x;
-            const startZ = camera.position.z;
-            pointLight.position.set(startX, lightingConfig.pointLightHeight, startZ);
-
-            if (path && pathIndex < path.length) {
-                const targetGrid = path[pathIndex];
-                const targetX = targetGrid.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
-                const targetZ = targetGrid.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
-                const direction = new THREE.Vector3(targetX - camera.position.x, 0, targetZ - camera.position.z).normalize();
-
+                // Smoothly rotate towards target
                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(
                     new THREE.Vector3(0, 0, -1),
                     direction
                 );
-                camera.quaternion.slerp(targetQuaternion, config.rotationLerpSpeed);
+                this.camera.quaternion.slerp(targetQuaternion, CONFIG.game.rotationLerpSpeed);
 
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                const moveStep = forward.multiplyScalar(config.pathSpeed * 0.05);
-                let newPosition = camera.position.clone().add(moveStep);
+                // Move towards target
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+                const moveStep = forward.multiplyScalar(CONFIG.game.pathSpeed * 0.05);
+                let newPosition = this.camera.position.clone().add(moveStep);
 
-                raycaster.set(camera.position, forward);
-                const intersects = raycaster.intersectObjects(wallMeshes);
+                // Collision check
+                this.raycaster.set(this.camera.position, forward);
+                const intersects = this.raycaster.intersectObjects(Array.from(this.walls.values()).map(w => w.mesh));
 
-                if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + config.safeDistance) {
+                if (intersects.length && intersects[0].distance <= moveStep.length() + CONFIG.game.safeDistance) {
                     const hitPoint = intersects[0].point;
                     const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
-                    newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(config.safeDistance));
+                    newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(CONFIG.game.safeDistance));
                 }
 
-                camera.position.copy(newPosition);
+                this.camera.position.copy(newPosition);
 
-                if (camera.position.distanceTo(new THREE.Vector3(targetX, camera.position.y, targetZ)) < 0.1) {
-                    pathIndex++;
+                // Move to next path point if close enough
+                if (this.camera.position.distanceTo(new THREE.Vector3(targetX, this.camera.position.y, targetZ)) < 0.1) {
+                    this.pathIndex++;
                 }
-            } else {
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+            }
+
+            // Handle manual player movement
+            handleManualMovement() {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
                 let moveDirection = new THREE.Vector3();
 
-                if (moveForward) moveDirection.add(forward);
-                if (moveBackward) moveDirection.add(forward.clone().negate());
-                if (moveLeft) moveDirection.add(right.clone().negate());
-                if (moveRight) moveDirection.add(right);
+                // Calculate movement direction
+                if (this.input.forward) moveDirection.add(forward);
+                if (this.input.backward) moveDirection.add(forward.clone().negate());
+                if (this.input.left) moveDirection.add(right.clone().negate());
+                if (this.input.right) moveDirection.add(right);
 
+                // Update velocity
                 if (moveDirection.length() > 0) {
                     moveDirection.normalize();
-                    velocity.copy(moveDirection.multiplyScalar(config.maxSpeed));
+                    this.velocity.copy(moveDirection.multiplyScalar(CONFIG.game.maxSpeed));
                 } else {
-                    velocity.lerp(new THREE.Vector3(0, 0, 0), config.friction);
+                    this.velocity.lerp(new THREE.Vector3(0, 0, 0), CONFIG.game.friction);
                 }
 
-                const moveStep = velocity.clone().multiplyScalar(0.1);
-                let newPosition = camera.position.clone();
+                const moveStep = this.velocity.clone().multiplyScalar(0.1);
+                let newPosition = this.camera.position.clone();
 
                 if (moveStep.length() > 0) {
                     const checkDirections = [
-                        forward,
-                        forward.clone().negate(),
-                        right,
-                        right.clone().negate(),
-                        forward.clone().add(right).normalize(),
-                        forward.clone().sub(right).normalize(),
-                        forward.clone().negate().add(right).normalize(),
-                        forward.clone().negate().sub(right).normalize()
+                        forward, forward.clone().negate(), right, right.clone().negate(),
+                        forward.clone().add(right).normalize(), forward.clone().sub(right).normalize(),
+                        forward.clone().negate().add(right).normalize(), forward.clone().negate().sub(right).normalize()
                     ];
 
                     let finalMove = moveStep.clone();
+                    const wallMeshes = Array.from(this.walls.values()).map(w => w.mesh);
 
+                    // Collision detection in multiple directions
                     for (const dir of checkDirections) {
-                        raycaster.set(camera.position, dir);
-                        const intersects = raycaster.intersectObjects(wallMeshes);
-                        if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + config.safeDistance) {
+                        this.raycaster.set(this.camera.position, dir);
+                        const intersects = this.raycaster.intersectObjects(wallMeshes);
+                        if (intersects.length && intersects[0].distance <= moveStep.length() + CONFIG.game.safeDistance) {
                             const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
                             const moveDotNormal = finalMove.dot(normal);
-                            if (moveDotNormal < 0) {
-                                finalMove.sub(normal.clone().multiplyScalar(moveDotNormal));
-                            }
+                            if (moveDotNormal < 0) finalMove.sub(normal.clone().multiplyScalar(moveDotNormal));
                         }
                     }
 
                     newPosition.add(finalMove);
 
+                    // Sweep test for wall penetration
                     const sweepDirections = [
-                        new THREE.Vector3(1, 0, 0),
-                        new THREE.Vector3(-1, 0, 0),
-                        new THREE.Vector3(0, 0, 1),
-                        new THREE.Vector3(0, 0, -1)
+                        new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
+                        new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)
                     ];
                     for (const dir of sweepDirections) {
-                        raycaster.set(newPosition, dir);
-                        const intersects = raycaster.intersectObjects(wallMeshes);
-                        if (intersects.length > 0 && intersects[0].distance < config.safeDistance) {
+                        this.raycaster.set(newPosition, dir);
+                        const intersects = this.raycaster.intersectObjects(wallMeshes);
+                        if (intersects.length && intersects[0].distance < CONFIG.game.safeDistance) {
                             const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
-                            const correction = normal.clone().multiplyScalar(config.safeDistance - intersects[0].distance);
+                            const correction = normal.clone().multiplyScalar(CONFIG.game.safeDistance - intersects[0].distance);
                             newPosition.add(correction);
                         }
                     }
 
-                    newPosition.x = Math.max(-mazeWidth * config.cellSize / 2 + config.safeDistance, Math.min(mazeWidth * config.cellSize / 2 - config.safeDistance, newPosition.x));
-                    newPosition.z = Math.max(-mazeHeight * config.cellSize / 2 + config.safeDistance, Math.min(mazeHeight * config.cellSize / 2 - config.safeDistance, newPosition.z));
+                    // Clamp position to maze bounds
+                    newPosition.x = Math.max(-mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.safeDistance,
+                                          Math.min(mazeWidth * CONFIG.game.cellSize / 2 - CONFIG.game.safeDistance, newPosition.x));
+                    newPosition.z = Math.max(-mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.safeDistance,
+                                          Math.min(mazeHeight * CONFIG.game.cellSize / 2 - CONFIG.game.safeDistance, newPosition.z));
                 }
 
-                camera.position.copy(newPosition);
-                if (velocity.length() < 0.01 && !moveForward && !moveBackward && !moveLeft && !moveRight) {
-                    velocity.set(0, 0, 0);
+                this.camera.position.copy(newPosition);
+                if (this.velocity.length() < 0.01 && !this.input.forward && !this.input.backward &&
+                    !this.input.left && !this.input.right) {
+                    this.velocity.set(0, 0, 0);
                 }
             }
 
-            const distanceToFinish = camera.position.distanceTo(finishMarker.position);
-            if (distanceToFinish < 0.5) {
-                showAchievement();
-            } else if (distanceToFinish < 2) {
-                finishMarker.scale.lerp(new THREE.Vector3(1.2, 1.2, 1.2), 0.1);
-            } else {
-                finishMarker.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+            // Update visibility of start/finish markers
+            updateMarkers() {
+                const startDist = this.camera.position.distanceTo(this.startMarker.position);
+                this.startMarker.visible = startDist <= CONFIG.game.visibilityRadius * CONFIG.game.cellSize;
+                const finishDist = this.camera.position.distanceTo(this.finishMarker.position);
+                this.finishMarker.visible = finishDist <= CONFIG.game.visibilityRadius * CONFIG.game.cellSize;
             }
 
-            updateUI();
-            renderer.render(scene, camera);
+            // Handle touch start event
+            handleTouchStart(e) {
+                if (e.touches.length === 1 && this.gameActive && !this.path) {
+                    this.touch.active = true;
+                    this.touch.startX = e.touches[0].clientX;
+                    this.touch.startY = e.touches[0].clientY;
+                    this.touch.lastX = this.touch.startX;
+                    this.touch.lastY = this.touch.startY;
+                    this.input.forward = false;
+                }
+            }
+
+            // Handle touch movement
+            handleTouchMove(e) {
+                if (this.touch.active && e.touches.length === 1 && this.gameActive && !this.path) {
+                    const touchX = e.touches[0].clientX;
+                    const touchY = e.touches[0].clientY;
+                    const deltaX = touchX - this.touch.lastX;
+                    const deltaY = touchY - this.touch.startY;
+
+                    if (deltaY < -50) this.input.forward = true;
+                    this.camera.rotation.y -= deltaX * 0.008;
+
+                    this.touch.lastX = touchX;
+                    this.touch.lastY = touchY;
+                }
+            }
+
+            // Handle touch end
+            handleTouchEnd() {
+                if (this.gameActive && !this.path) {
+                    this.touch.active = false;
+                    this.input.forward = false;
+                }
+            }
+
+            // Handle keyboard input
+            handleKeyDown(e) {
+                if (!this.gameActive) {
+                    if (e.key === ' ' && this.achievementElement.style.display === 'block') this.restartGame();
+                    return;
+                }
+
+                switch (e.key.toLowerCase()) {
+                    case 'w': if (!this.path) this.input.forward = true; break;
+                    case 's': if (!this.path) this.input.backward = true; break;
+                    case 'a': if (!this.path) this.input.left = true; break;
+                    case 'd': if (!this.path) this.input.right = true; break;
+                    case 't': this.togglePathfinding(); break;
+                    case 'p': this.togglePathDebug(); break;
+                    case 'f': this.toggleFog(); break;
+                }
+            }
+
+            // Handle key release
+            handleKeyUp(e) {
+                if (this.gameActive && !this.path) {
+                    switch (e.key.toLowerCase()) {
+                        case 'w': this.input.forward = false; break;
+                        case 's': this.input.backward = false; break;
+                        case 'a': this.input.left = false; break;
+                        case 'd': this.input.right = false; break;
+                    }
+                }
+            }
+
+            // Handle UI element interactions
+            handleUIInteraction(element) {
+                if ((element === this.achievementElement || element === this.restartButton) && !this.gameActive) {
+                    this.restartGame();
+                }
+            }
+
+            // Start a new game with selected difficulty
+            startGame(difficultyKey) {
+                this.currentDifficulty = CONFIG.difficulty[difficultyKey];
+                this.hideMenu();
+                this.gameActive = true;
+                this.startTime = performance.now();
+                this.score = 0;
+                this.velocity.set(0, 0, 0);
+                this.path = null;
+                this.input = { forward: false, backward: false, left: false, right: false };
+                this.generateMaze();
+                this.setupScene();
+                this.animate();
+            }
+
+            // Display achievement screen
+            showAchievement() {
+                this.achievementElement.style.display = 'block';
+                this.restartButton.style.display = 'block';
+                this.gameActive = false;
+                this.path = null;
+                const timeTaken = Math.floor((performance.now() - this.startTime) / 1000);
+                this.score = Math.max(0, 1000 - timeTaken * 10);
+                this.updateUI();
+            }
+
+            // Reset game state for restart
+            restartGame() {
+                this.scene.clear();
+                this.walls.clear();
+                this.maze = { data: [], vWalls: [], hWalls: [] };
+                this.start = { x: 0, z: 0 };
+                this.pathMarkers.forEach(marker => this.scene.remove(marker));
+                this.pathMarkers = [];
+                this.showMenu();
+                this.achievementElement.style.display = 'none';
+                this.restartButton.style.display = 'none';
+            }
+
+            // Update fog state
+            updateFog(color) {
+                this.scene.fog = this.fogActive ? new THREE.Fog(color, 1, this.currentDifficulty.fogDistance) : null;
+            }
+
+            // Update UI display
+            updateUI() {
+                if (this.gameActive) {
+                    const timeElapsed = Math.floor((performance.now() - this.startTime) / 1000);
+                    this.uiElement.textContent = `Score: ${this.score} | Time: ${timeElapsed}s`;
+                }
+            }
+
+            // Toggle pathfinding mode
+            togglePathfinding() {
+                if (!this.gameActive) return;
+                if (this.path) {
+                    this.path = null;
+                    this.velocity.set(0, 0, 0);
+                    this.renderPathMarkers();
+                } else {
+                    const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                    const startX = Math.floor((this.camera.position.x + mazeWidth * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize);
+                    const startZ = Math.floor((this.camera.position.z + mazeHeight * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize);
+                    this.path = this.aStarPathfinding({ x: startX, z: startZ }, this.finish);
+                    this.pathIndex = 0;
+                    this.input = { forward: false, backward: false, left: false, right: false };
+                    this.velocity.set(0, 0, 0);
+                    this.renderPathMarkers();
+                }
+            }
+
+            // Toggle path debug visualization
+            togglePathDebug() {
+                document.body.classList.toggle('debug-path');
+                this.renderPathMarkers();
+            }
+
+            // Toggle fog visibility
+            toggleFog() {
+                this.fogActive = !this.fogActive;
+                this.updateFog(0x111111);
+            }
+
+            // Render path debug markers
+            renderPathMarkers() {
+                this.pathMarkers.forEach(marker => this.scene.remove(marker));
+                this.pathMarkers = [];
+                if (this.path && document.body.classList.contains('debug-path')) {
+                    const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                    this.path.forEach(node => {
+                        const marker = new THREE.Mesh(
+                            new THREE.SphereGeometry(CONFIG.materials.pathMarkerSize),
+                            new THREE.MeshBasicMaterial({ color: CONFIG.materials.pathMarkerColor })
+                        );
+                        marker.position.set(
+                            node.x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2,
+                            0,
+                            node.z * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2
+                        );
+                        this.scene.add(marker);
+                        this.pathMarkers.push(marker);
+                    });
+                }
+            }
+
+            // A* pathfinding algorithm
+            aStarPathfinding(start, end) {
+                const openSet = [];
+                const cameFrom = new Map();
+                const gScore = new Map([[`${start.x},${start.z}`, 0]]);
+                const fScore = new Map([[`${start.x},${start.z}`, this.heuristic(start, end)]]);
+                openSet.push(start);
+
+                while (openSet.length) {
+                    openSet.sort((a, b) => fScore.get(`${a.x},${a.z}`) - fScore.get(`${b.x},${b.z}`));
+                    const current = openSet.shift();
+
+                    if (current.x === end.x && current.z === end.z) {
+                        return this.reconstructPath(cameFrom, current);
+                    }
+
+                    for (const neighbor of this.getNeighbors(current)) {
+                        const tentativeGScore = gScore.get(`${current.x},${current.z}`) + 1;
+                        const key = `${neighbor.x},${neighbor.z}`;
+
+                        if (!gScore.has(key) || tentativeGScore < gScore.get(key)) {
+                            cameFrom.set(key, current);
+                            gScore.set(key, tentativeGScore);
+                            fScore.set(key, tentativeGScore + this.heuristic(neighbor, end));
+                            if (!openSet.some(n => n.x === neighbor.x && n.z === neighbor.z)) {
+                                openSet.push(neighbor);
+                            }
+                        }
+                    }
+                }
+                return null;
+            }
+
+            // Manhattan distance heuristic for A*
+            heuristic(a, b) {
+                return Math.abs(a.x - b.x) + Math.abs(a.z - b.z);
+            }
+
+            // Get valid neighboring cells
+            getNeighbors(pos) {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const neighbors = [];
+                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+                for (const [dx, dz] of directions) {
+                    const nx = pos.x + dx;
+                    const nz = pos.z + dz;
+                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
+                        if (dx === 1 && !this.maze.vWalls[pos.x + 1][pos.z]) neighbors.push({ x: nx, z: nz });
+                        else if (dx === -1 && !this.maze.vWalls[pos.x][pos.z]) neighbors.push({ x: nx, z: nz });
+                        else if (dz === 1 && !this.maze.hWalls[pos.x][pos.z + 1]) neighbors.push({ x: nx, z: nz });
+                        else if (dz === -1 && !this.maze.hWalls[pos.x][pos.z]) neighbors.push({ x: nx, z: nz });
+                    }
+                }
+                return neighbors;
+            }
+
+            // Reconstruct path from A* results
+            reconstructPath(cameFrom, current) {
+                const path = [current];
+                while (cameFrom.has(`${current.x},${current.z}`)) {
+                    current = cameFrom.get(`${current.x},${current.z}`);
+                    path.unshift(current);
+                }
+                return path;
+            }
         }
 
-        setupMenu();
-        showMenu();
-
-        window.addEventListener('resize', () => {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        });
+        // Initialize and start the game
+        const game = new MazeGame();
     </script>
 </body>
 </html>
