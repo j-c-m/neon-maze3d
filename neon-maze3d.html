@@ -69,8 +69,15 @@
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
     <div id="menu"></div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js"></script>
-    <script>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://cdn.jsdelivr.net/npm/three@v0.173.0/build/three.module.js",
+            "three/addons/": "https://cdn.jsdelivr.net/npm/three@v0.173.0/examples/jsm/"
+          }
+        }
+    </script>
+    <script type="module">
         /*
          * Changelog:
          * Version 4.0  - Updated to major version 4.0 with no functional changes
@@ -96,6 +103,7 @@
          * git commit -m "Moved and documented config constants into a config object, no version increment" neon-maze3d.html
          */
 
+        import * as THREE from 'three';
         const scene = new THREE.Scene();
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -315,9 +323,9 @@
             finishMarker.position.set(finishX, 0, finishZ);
             scene.add(finishMarker);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1);
             scene.add(ambientLight);
-            pointLight = new THREE.PointLight(0xffffff, 0.8, 50);
+            pointLight = new THREE.PointLight(0xffffff, 50, 25);
             pointLight.position.set(startX, 2, startZ);
             scene.add(pointLight);
 
