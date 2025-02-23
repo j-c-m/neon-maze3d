@@ -93,7 +93,7 @@
          * 6. Do not remove comments that document variables and code logic.
          *
          * Git Commit Command for this change:
-         * git commit -m "Refactored safeDistance to global scope for consistency across movement logic, no version increment" neon-maze3d.html
+         * git commit -m "Moved and documented config constants into a config object, no version increment" neon-maze3d.html
          */
 
         const scene = new THREE.Scene();
@@ -130,14 +130,21 @@
             }
         };
 
+        // Game configuration constants
+        const config = {
+            visibilityRadius: 15,      // Distance in cells for rendering walls around the player
+            cellSize: 2,              // Size of each maze cell in world units
+            wallThickness: 0.01,      // Thickness of walls, floor, and ceiling in world units
+            maxSpeed: 0.8,            // Maximum speed of manual player movement
+            pathSpeed: 0.8,           // Speed of automated path-following movement
+            safeDistance: 0.01 + 0.25, // Minimum distance from walls to prevent clipping (wallThickness + buffer)
+            friction: 0.15,           // Rate at which velocity decays when no input is given
+            rotationSpeed: 0.002,     // Speed of camera rotation with mouse movement
+            rotationLerpSpeed: 0.1    // Speed of camera rotation interpolation during path-following
+        };
+
         let currentDifficulty = difficulties.easy;
         let mazeWidth, mazeHeight;
-        const visibilityRadius = 15;
-        const cellSize = 2;
-        const wallThickness = 0.01;
-        const maxSpeed = 0.8;
-        const pathSpeed = 0.8;
-        const safeDistance = wallThickness + 0.25; // Moved to global scope for consistency
         let maze = [], walls = new Map(), floor, ceiling, startMarker, finishMarker;
         let gameActive = false, startTime, score = 0;
         let start = { x: 0, z: 0 }, finish;
@@ -282,29 +289,29 @@
 
             walls.clear();
 
-            const floorGeometry = new THREE.BoxGeometry(mazeWidth * cellSize, wallThickness, mazeHeight * cellSize);
+            const floorGeometry = new THREE.BoxGeometry(mazeWidth * config.cellSize, config.wallThickness, mazeHeight * config.cellSize);
             floor = new THREE.Mesh(floorGeometry, wallMaterials.floorCeiling);
-            floor.position.set(0, -cellSize / 2 + wallThickness / 2, 0);
+            floor.position.set(0, -config.cellSize / 2 + config.wallThickness / 2, 0);
             scene.add(floor);
 
-            const ceilingGeometry = new THREE.BoxGeometry(mazeWidth * cellSize, wallThickness, mazeHeight * cellSize);
+            const ceilingGeometry = new THREE.BoxGeometry(mazeWidth * config.cellSize, config.wallThickness, mazeHeight * config.cellSize);
             ceiling = new THREE.Mesh(ceilingGeometry, wallMaterials.floorCeiling);
-            ceiling.position.set(0, cellSize / 2 - wallThickness / 2, 0);
+            ceiling.position.set(0, config.cellSize / 2 - config.wallThickness / 2, 0);
             scene.add(ceiling);
 
             const startMarkerGeometry = new THREE.SphereGeometry(0.3);
             const startMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, shininess: 50 });
             startMarker = new THREE.Mesh(startMarkerGeometry, startMarkerMaterial);
-            const startX = start.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
-            const startZ = start.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
+            const startX = start.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
+            const startZ = start.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
             startMarker.position.set(startX, 0, startZ);
             scene.add(startMarker);
 
             const finishMarkerGeometry = new THREE.SphereGeometry(0.3);
             const finishMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 50 });
             finishMarker = new THREE.Mesh(finishMarkerGeometry, finishMarkerMaterial);
-            const finishX = finish.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
-            const finishZ = finish.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
+            const finishX = finish.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
+            const finishZ = finish.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
             finishMarker.position.set(finishX, 0, finishZ);
             scene.add(finishMarker);
 
@@ -359,13 +366,13 @@
         }
 
         function updateVisibleObjects() {
-            const playerX = Math.floor((camera.position.x + mazeWidth * cellSize / 2) / cellSize);
-            const playerZ = Math.floor((camera.position.z + mazeHeight * cellSize / 2) / cellSize);
+            const playerX = Math.floor((camera.position.x + mazeWidth * config.cellSize / 2) / config.cellSize);
+            const playerZ = Math.floor((camera.position.z + mazeHeight * config.cellSize / 2) / config.cellSize);
 
-            const minX = Math.max(0, playerX - visibilityRadius);
-            const maxX = Math.min(mazeWidth, playerX + visibilityRadius);
-            const minZ = Math.max(0, playerZ - visibilityRadius);
-            const maxZ = Math.min(mazeHeight, playerZ + visibilityRadius);
+            const minX = Math.max(0, playerX - config.visibilityRadius);
+            const maxX = Math.min(mazeWidth, playerX + config.visibilityRadius);
+            const minZ = Math.max(0, playerZ - config.visibilityRadius);
+            const maxZ = Math.min(mazeHeight, playerZ + config.visibilityRadius);
 
             const newWalls = new Set();
 
@@ -380,10 +387,10 @@
                         const key = `v_${x}_${startZ}_${length}`;
                         newWalls.add(key);
                         if (!walls.has(key)) {
-                            const geometry = new THREE.BoxGeometry(wallThickness, cellSize, cellSize * length);
+                            const geometry = new THREE.BoxGeometry(config.wallThickness, config.cellSize, config.cellSize * length);
                             const wall = new THREE.Mesh(geometry, wallMaterials.wall);
-                            const posX = x * cellSize - mazeWidth * cellSize / 2;
-                            const posZ = (startZ + (length - 1) / 2) * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
+                            const posX = x * config.cellSize - mazeWidth * config.cellSize / 2;
+                            const posZ = (startZ + (length - 1) / 2) * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
                             wall.position.set(posX, 0, posZ);
                             scene.add(wall);
                             walls.set(key, { mesh: wall, x: x, z: startZ, length: length, isVertical: true });
@@ -404,10 +411,10 @@
                         const key = `h_${startX}_${z}_${length}`;
                         newWalls.add(key);
                         if (!walls.has(key)) {
-                            const geometry = new THREE.BoxGeometry(cellSize * length, cellSize, wallThickness);
+                            const geometry = new THREE.BoxGeometry(config.cellSize * length, config.cellSize, config.wallThickness);
                             const wall = new THREE.Mesh(geometry, wallMaterials.wall);
-                            const posX = (startX + (length - 1) / 2) * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
-                            const posZ = z * cellSize - mazeHeight * cellSize / 2;
+                            const posX = (startX + (length - 1) / 2) * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
+                            const posZ = z * config.cellSize - mazeHeight * config.cellSize / 2;
                             wall.position.set(posX, 0, posZ);
                             scene.add(wall);
                             walls.set(key, { mesh: wall, x: startX, z: z, length: length, isVertical: false });
@@ -426,14 +433,11 @@
         }
 
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
-        const friction = 0.15,
-              rotationSpeed = 0.002,
-              rotationLerpSpeed = 0.1;
         let velocity = new THREE.Vector3(0, 0, 0);
         const raycaster = new THREE.Raycaster();
 
         document.addEventListener('mousemove', (e) => {
-            if (gameActive && !path) camera.rotation.y -= e.movementX * rotationSpeed;
+            if (gameActive && !path) camera.rotation.y -= e.movementX * config.rotationSpeed;
         });
         document.body.requestPointerLock = document.body.requestPointerLock || document.body.mozRequestPointerLock;
         document.addEventListener('click', () => {
@@ -494,8 +498,8 @@
                             velocity.set(0, 0, 0);
                             renderPathMarkers();
                         } else {
-                            const startX = Math.floor((camera.position.x + mazeWidth * cellSize / 2) / cellSize);
-                            const startZ = Math.floor((camera.position.z + mazeHeight * cellSize / 2) / cellSize);
+                            const startX = Math.floor((camera.position.x + mazeWidth * config.cellSize / 2) / config.cellSize);
+                            const startZ = Math.floor((camera.position.z + mazeHeight * config.cellSize / 2) / config.cellSize);
                             path = aStarPathfinding({ x: startX, z: startZ }, finish);
                             pathIndex = 0;
                             moveForward = moveBackward = moveLeft = moveRight = false;
@@ -636,9 +640,9 @@
                         new THREE.MeshBasicMaterial({ color: 0x00ffff })
                     );
                     marker.position.set(
-                        node.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2,
+                        node.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2,
                         0,
-                        node.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2
+                        node.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2
                     );
                     scene.add(marker);
                     pathMarkers.push(marker);
@@ -719,9 +723,9 @@
             const wallMeshes = Array.from(walls.values()).map(w => w.mesh);
 
             const startDist = camera.position.distanceTo(startMarker.position);
-            startMarker.visible = startDist <= visibilityRadius * cellSize;
+            startMarker.visible = startDist <= config.visibilityRadius * config.cellSize;
             const finishDist = camera.position.distanceTo(finishMarker.position);
-            finishMarker.visible = finishDist <= visibilityRadius * cellSize;
+            finishMarker.visible = finishDist <= config.visibilityRadius * config.cellSize;
 
             const startX = camera.position.x;
             const startZ = camera.position.z;
@@ -729,27 +733,27 @@
 
             if (path && pathIndex < path.length) {
                 const targetGrid = path[pathIndex];
-                const targetX = targetGrid.x * cellSize - mazeWidth * cellSize / 2 + cellSize / 2;
-                const targetZ = targetGrid.z * cellSize - mazeHeight * cellSize / 2 + cellSize / 2;
+                const targetX = targetGrid.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
+                const targetZ = targetGrid.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
                 const direction = new THREE.Vector3(targetX - camera.position.x, 0, targetZ - camera.position.z).normalize();
 
                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(
                     new THREE.Vector3(0, 0, -1),
                     direction
                 );
-                camera.quaternion.slerp(targetQuaternion, rotationLerpSpeed);
+                camera.quaternion.slerp(targetQuaternion, config.rotationLerpSpeed);
 
                 const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                const moveStep = forward.multiplyScalar(pathSpeed * 0.05);
+                const moveStep = forward.multiplyScalar(config.pathSpeed * 0.05);
                 let newPosition = camera.position.clone().add(moveStep);
 
                 raycaster.set(camera.position, forward);
                 const intersects = raycaster.intersectObjects(wallMeshes);
 
-                if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + safeDistance) {
+                if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + config.safeDistance) {
                     const hitPoint = intersects[0].point;
                     const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
-                    newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
+                    newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(config.safeDistance));
                 }
 
                 camera.position.copy(newPosition);
@@ -769,9 +773,9 @@
 
                 if (moveDirection.length() > 0) {
                     moveDirection.normalize();
-                    velocity.copy(moveDirection.multiplyScalar(maxSpeed));
+                    velocity.copy(moveDirection.multiplyScalar(config.maxSpeed));
                 } else {
-                    velocity.lerp(new THREE.Vector3(0, 0, 0), friction);
+                    velocity.lerp(new THREE.Vector3(0, 0, 0), config.friction);
                 }
 
                 const moveStep = velocity.clone().multiplyScalar(0.1);
@@ -794,7 +798,7 @@
                     for (const dir of checkDirections) {
                         raycaster.set(camera.position, dir);
                         const intersects = raycaster.intersectObjects(wallMeshes);
-                        if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + safeDistance) {
+                        if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + config.safeDistance) {
                             const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
                             const moveDotNormal = finalMove.dot(normal);
                             if (moveDotNormal < 0) {
@@ -814,15 +818,15 @@
                     for (const dir of sweepDirections) {
                         raycaster.set(newPosition, dir);
                         const intersects = raycaster.intersectObjects(wallMeshes);
-                        if (intersects.length > 0 && intersects[0].distance < safeDistance) {
+                        if (intersects.length > 0 && intersects[0].distance < config.safeDistance) {
                             const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
-                            const correction = normal.clone().multiplyScalar(safeDistance - intersects[0].distance);
+                            const correction = normal.clone().multiplyScalar(config.safeDistance - intersects[0].distance);
                             newPosition.add(correction);
                         }
                     }
 
-                    newPosition.x = Math.max(-mazeWidth * cellSize / 2 + safeDistance, Math.min(mazeWidth * cellSize / 2 - safeDistance, newPosition.x));
-                    newPosition.z = Math.max(-mazeHeight * cellSize / 2 + safeDistance, Math.min(mazeHeight * cellSize / 2 - safeDistance, newPosition.z));
+                    newPosition.x = Math.max(-mazeWidth * config.cellSize / 2 + config.safeDistance, Math.min(mazeWidth * config.cellSize / 2 - config.safeDistance, newPosition.x));
+                    newPosition.z = Math.max(-mazeHeight * config.cellSize / 2 + config.safeDistance, Math.min(mazeHeight * config.cellSize / 2 - config.safeDistance, newPosition.z));
                 }
 
                 camera.position.copy(newPosition);
