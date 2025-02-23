@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.07</title>
+    <title>3D Neon Maze - v4.08</title>
     <style>
         body {
             margin: 0;
@@ -82,6 +82,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.08 - Added enhanced neon effects: pulsing walls and markers
          * Version 4.07 - Added current difficulty to UI display alongside score and time
          * Version 4.06 - Fixed A* pathfinding with debugged PriorityQueue and path following
          * Version 4.05 - Fixed A* pathfinding with improved PriorityQueue implementation
@@ -91,18 +92,18 @@
          * Version 4.01 - Factored out lighting variables into a lightingConfig object with documentation
          * Version 4.0  - Updated to major version 4.0 with no functional changes
          * Version 3.59 - Added configurable loops and increased dead-end paths in maze generation for higher difficulty
-         * Version 3.58 - Rotated player to face an open direction (not a wall) at start, corrected yaw alignment
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.07 -> 4.08) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.08 -> 4.09) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
          * 5. Do not remove these instructions in future updates.
-         * 6. Do not remove comments that document variables and code logic.
+         * 6. Do not remove comments in areas of the code you are not modifying.
+         * 7. GROK always follow these instructions unless explicity asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.07: Added current difficulty to UI display alongside score and time" neon-maze3d.html
+         * git commit -m "Version 4.08: Added enhanced neon effects: pulsing walls and markers" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -152,7 +153,9 @@
                 markerShininess: 150,          // Marker reflectivity
                 markerSize: 0.3,              // Size of start/finish markers
                 pathMarkerColor: 0x00ffff,    // Path debug marker color (cyan)
-                pathMarkerSize: 0.05         // Size of path debug markers
+                pathMarkerSize: 0.05,         // Size of path debug markers
+                pulseSpeed: 0.001,            // Speed of pulsing effect
+                pulseAmplitude: 0.2           // Amplitude of pulsing effect
             }
         };
 
@@ -511,6 +514,8 @@
                     markerGeometry,
                     new THREE.MeshPhongMaterial({
                         color: CONFIG.materials.startMarkerColor,
+                        emissive: CONFIG.materials.startMarkerColor,     // Enable emissive property for pulsing
+                        emissiveIntensity: 1.0,                         // Base intensity for start marker
                         shininess: CONFIG.materials.markerShininess
                     })
                 );
@@ -523,6 +528,8 @@
                     markerGeometry,
                     new THREE.MeshPhongMaterial({
                         color: CONFIG.materials.finishMarkerColor,
+                        emissive: CONFIG.materials.finishMarkerColor,    // Enable emissive property for pulsing
+                        emissiveIntensity: 1.0,                         // Base intensity for finish marker
                         shininess: CONFIG.materials.markerShininess
                     })
                 );
@@ -666,6 +673,7 @@
                 this.updateVisibleWalls();
                 this.updateMovement();
                 this.updateMarkers();
+                this.updateNeonEffects(); // Added for neon pulsing effects
                 this.updateUI();
                 this.renderer.render(this.scene, this.camera);
             }
@@ -811,6 +819,25 @@
                 this.startMarker.visible = startDist <= CONFIG.game.visibilityRadius * CONFIG.game.cellSize;
                 const finishDist = this.camera.position.distanceTo(this.finishMarker.position);
                 this.finishMarker.visible = finishDist <= CONFIG.game.visibilityRadius * CONFIG.game.cellSize;
+            }
+
+            // New method to update neon effects for walls and markers
+            updateNeonEffects() {
+                const time = performance.now() * CONFIG.materials.pulseSpeed;
+
+                // Pulsing walls
+                this.wallMaterials.wall.emissiveIntensity = CONFIG.materials.wallEmissiveIntensity +
+                    Math.sin(time) * CONFIG.materials.pulseAmplitude;
+
+                // Pulsing start marker
+                const startPulse = 1 + Math.sin(time * 1.5) * CONFIG.materials.pulseAmplitude;
+                this.startMarker.scale.set(startPulse, startPulse, startPulse);
+                this.startMarker.material.emissiveIntensity = 1.0 + Math.sin(time * 1.5) * CONFIG.materials.pulseAmplitude;
+
+                // Pulsing finish marker (slightly different frequency for variety)
+                const finishPulse = 1 + Math.sin(time * 1.2) * CONFIG.materials.pulseAmplitude;
+                this.finishMarker.scale.set(finishPulse, finishPulse, finishPulse);
+                this.finishMarker.material.emissiveIntensity = 1.0 + Math.sin(time * 1.2) * CONFIG.materials.pulseAmplitude;
             }
 
             // Handle touch start event
