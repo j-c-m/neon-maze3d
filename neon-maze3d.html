@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.06</title>
+    <title>3D Neon Maze - v4.07</title>
     <style>
         body {
             margin: 0;
@@ -65,7 +65,7 @@
     </style>
 </head>
 <body>
-    <div id="ui">Score: 0 | Time: 0s</div>
+    <div id="ui">Score: 0 | Time: 0s | Difficulty: Easy</div>
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
     <div id="menu"></div>
@@ -82,6 +82,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.07 - Added current difficulty to UI display alongside score and time
          * Version 4.06 - Fixed A* pathfinding with debugged PriorityQueue and path following
          * Version 4.05 - Fixed A* pathfinding with improved PriorityQueue implementation
          * Version 4.04 - Added PriorityQueue to A* pathfinding for better performance on large mazes
@@ -91,10 +92,9 @@
          * Version 4.0  - Updated to major version 4.0 with no functional changes
          * Version 3.59 - Added configurable loops and increased dead-end paths in maze generation for higher difficulty
          * Version 3.58 - Rotated player to face an open direction (not a wall) at start, corrected yaw alignment
-         * Version 3.57 - Refined touch controls: swipe up and hold to move forward, swipe left/right to rotate
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.06 -> 4.07) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.07 -> 4.08) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
@@ -102,7 +102,7 @@
          * 6. Do not remove comments that document variables and code logic.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.06: Fixed A* pathfinding with debugged PriorityQueue and path following" neon-maze3d.html
+         * git commit -m "Version 4.07: Added current difficulty to UI display alongside score and time" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -934,7 +934,11 @@
             updateUI() {
                 if (this.gameActive) {
                     const timeElapsed = Math.floor((performance.now() - this.startTime) / 1000);
-                    this.uiElement.textContent = `Score: ${this.score} | Time: ${timeElapsed}s`;
+                    const difficultyKey = Object.keys(CONFIG.difficulty).find(
+                        key => CONFIG.difficulty[key] === this.currentDifficulty
+                    );
+                    const difficultyText = difficultyKey.charAt(0).toUpperCase() + difficultyKey.slice(1);
+                    this.uiElement.textContent = `Score: ${this.score} | Time: ${timeElapsed}s | Difficulty: ${difficultyText}`;
                 }
             }
 
