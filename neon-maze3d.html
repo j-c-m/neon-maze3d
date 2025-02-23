@@ -282,6 +282,9 @@
 
             wallMaterials.wall = new THREE.MeshPhongMaterial({
                 color: wallColor,
+                emissive: wallColor,
+                emissiveIntensity: 0.5,
+                shininess: 100,
                 opacity: 1.0,
                 transparent: false,
                 side: THREE.DoubleSide,
@@ -289,6 +292,9 @@
             });
             wallMaterials.floorCeiling = new THREE.MeshPhongMaterial({
                 color: floorCeilingColor,
+                emissive: floorCeilingColor,
+                emissiveIntensity: 0.5,
+                shininess: 100,
                 opacity: 1.0,
                 transparent: false,
                 side: THREE.DoubleSide,
@@ -308,7 +314,7 @@
             scene.add(ceiling);
 
             const startMarkerGeometry = new THREE.SphereGeometry(0.3);
-            const startMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, shininess: 50 });
+            const startMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, shininess: 150 });
             startMarker = new THREE.Mesh(startMarkerGeometry, startMarkerMaterial);
             const startX = start.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
             const startZ = start.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
@@ -316,14 +322,14 @@
             scene.add(startMarker);
 
             const finishMarkerGeometry = new THREE.SphereGeometry(0.3);
-            const finishMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 50 });
+            const finishMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 150 });
             finishMarker = new THREE.Mesh(finishMarkerGeometry, finishMarkerMaterial);
             const finishX = finish.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
             const finishZ = finish.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
             finishMarker.position.set(finishX, 0, finishZ);
             scene.add(finishMarker);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
             pointLight = new THREE.PointLight(0xffffff, 50, 25);
             pointLight.position.set(startX, 2, startZ);
