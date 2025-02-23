@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.03</title>
+    <title>3D Neon Maze - v4.04</title>
     <style>
         body {
             margin: 0;
@@ -82,6 +82,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.04 - Added PriorityQueue to A* pathfinding for better performance on large mazes
          * Version 4.03 - Complete refactor: modular structure, improved performance, better code organization
          * Version 4.02 - Factored out material and color variables into a materialConfig object with documentation
          * Version 4.01 - Factored out lighting variables into a lightingConfig object with documentation
@@ -91,10 +92,17 @@
          * Version 3.57 - Refined touch controls: swipe up and hold to move forward, swipe left/right to rotate
          * Version 3.56 - Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu
          * Version 3.55 - Adjusted mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
-         * Version 3.54 - Adjusted maze size by difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
          *
-         * Git Commit Command:
-         * git commit -m "Version 4.03: Complete refactor - modular structure, improved performance, better code organization" neon-maze3d.html
+         * Instructions for Future Changes:
+         * 1. Increment the version number (e.g., 4.04 -> 4.05) in the <title> and changelog.
+         * 2. Add a new entry to this changelog with the version and a brief description of changes.
+         * 3. Include the last 10 most recent changes in the changelog.
+         * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
+         * 5. Do not remove these instructions in future updates.
+         * 6. Do not remove comments that document variables and code logic.
+         *
+         * Git Commit Command for this change:
+         * git commit -m "Version 4.04: Added PriorityQueue to A* pathfinding for better performance on large mazes" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -147,6 +155,30 @@
                 pathMarkerSize: 0.05         // Size of path debug markers
             }
         };
+
+        // Priority Queue implementation for A* pathfinding
+        class PriorityQueue {
+            constructor(comparator) {
+                this.items = [];           // Array to store queue items
+                this.comparator = comparator; // Function to compare items for priority
+            }
+
+            // Add an item to the queue
+            push(item) {
+                this.items.push(item);
+                this.items.sort(this.comparator);
+            }
+
+            // Remove and return the highest priority item
+            pop() {
+                return this.items.shift();
+            }
+
+            // Check if queue is empty
+            isEmpty() {
+                return this.items.length === 0;
+            }
+        }
 
         class MazeGame {
             constructor() {
@@ -938,37 +970,45 @@
                 }
             }
 
-            // A* pathfinding algorithm
+            // Optimized A* pathfinding using PriorityQueue
             aStarPathfinding(start, end) {
-                const openSet = [];
-                const cameFrom = new Map();
-                const gScore = new Map([[`${start.x},${start.z}`, 0]]);
-                const fScore = new Map([[`${start.x},${start.z}`, this.heuristic(start, end)]]);
+                // Priority queue for open set, sorted by fScore
+                const openSet = new PriorityQueue((a, b) =>
+                    (this.fScore.get(`${a.x},${a.z}`) || Infinity) -
+                    (this.fScore.get(`${b.x},${b.z}`) || Infinity)
+                );
                 openSet.push(start);
 
-                while (openSet.length) {
-                    openSet.sort((a, b) => fScore.get(`${a.x},${a.z}`) - fScore.get(`${b.x},${b.z}`));
-                    const current = openSet.shift();
+                const cameFrom = new Map();  // Track path reconstruction
+                const gScore = new Map();    // Cost from start to node
+                const fScore = new Map();    // Estimated total cost through node
+                this.fScore = fScore;       // Store for priority queue access
+
+                gScore.set(`${start.x},${start.z}`, 0);
+                fScore.set(`${start.x},${start.z}`, this.heuristic(start, end));
+
+                while (!openSet.isEmpty()) {
+                    const current = openSet.pop();
 
                     if (current.x === end.x && current.z === end.z) {
                         return this.reconstructPath(cameFrom, current);
                     }
 
                     for (const neighbor of this.getNeighbors(current)) {
-                        const tentativeGScore = gScore.get(`${current.x},${current.z}`) + 1;
+                        const tentativeGScore = (gScore.get(`${current.x},${current.z}`) || Infinity) + 1;
                         const key = `${neighbor.x},${neighbor.z}`;
 
-                        if (!gScore.has(key) || tentativeGScore < gScore.get(key)) {
+                        if (tentativeGScore < (gScore.get(key) || Infinity)) {
                             cameFrom.set(key, current);
                             gScore.set(key, tentativeGScore);
                             fScore.set(key, tentativeGScore + this.heuristic(neighbor, end));
-                            if (!openSet.some(n => n.x === neighbor.x && n.z === neighbor.z)) {
+                            if (!openSet.items.some(n => n.x === neighbor.x && n.z === neighbor.z)) {
                                 openSet.push(neighbor);
                             }
                         }
                     }
                 }
-                return null;
+                return null; // No path found
             }
 
             // Manhattan distance heuristic for A*
