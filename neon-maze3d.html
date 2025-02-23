@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.0</title>
+    <title>3D Neon Maze - v4.01</title>
     <style>
         body {
             margin: 0;
@@ -80,6 +80,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.01 - Factored out lighting variables into a lightingConfig object with documentation
          * Version 4.0  - Updated to major version 4.0 with no functional changes
          * Version 3.59 - Added configurable loops and increased dead-end paths in maze generation for higher difficulty
          * Version 3.58 - Rotated player to face an open direction (not a wall) at start, corrected yaw alignment
@@ -89,7 +90,6 @@
          * Version 3.54 - Adjusted maze size by difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
          * Version 3.53 - Ensured distinct wall/floor colors, added neon palette
          * Version 3.52 - Switched to iterative stack-based backtracking
-         * Version 3.51 - Replaced Kruskal’s with Recursive Backtracking
          *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 3.59 -> 3.60) in the <title> and changelog.
@@ -100,7 +100,7 @@
          * 6. Do not remove comments that document variables and code logic.
          *
          * Git Commit Command for this change:
-         * git commit -m "Moved and documented config constants into a config object, no version increment" neon-maze3d.html
+         * git commit -m "Factored out lighting variables into a lightingConfig object with documentation" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -149,6 +149,16 @@
             friction: 0.15,           // Rate at which velocity decays when no input is given
             rotationSpeed: 0.002,     // Speed of camera rotation with mouse movement
             rotationLerpSpeed: 0.1    // Speed of camera rotation interpolation during path-following
+        };
+
+        // Lighting configuration constants
+        const lightingConfig = {
+            ambientLightColor: 0xffffff,  // Color of ambient light illuminating the entire scene
+            ambientLightIntensity: 0.5,   // Intensity of ambient light (0 to 1 scale)
+            pointLightColor: 0xffffff,    // Color of the point light following the player
+            pointLightIntensity: 50,      // Intensity of the point light (affects brightness and reach)
+            pointLightDistance: 25,       // Maximum distance the point light affects (in world units)
+            pointLightHeight: 2           // Height above the player where the point light is positioned
         };
 
         let currentDifficulty = difficulties.easy;
@@ -329,10 +339,10 @@
             finishMarker.position.set(finishX, 0, finishZ);
             scene.add(finishMarker);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            const ambientLight = new THREE.AmbientLight(lightingConfig.ambientLightColor, lightingConfig.ambientLightIntensity);
             scene.add(ambientLight);
-            pointLight = new THREE.PointLight(0xffffff, 50, 25);
-            pointLight.position.set(startX, 2, startZ);
+            pointLight = new THREE.PointLight(lightingConfig.pointLightColor, lightingConfig.pointLightIntensity, lightingConfig.pointLightDistance);
+            pointLight.position.set(startX, lightingConfig.pointLightHeight, startZ);
             scene.add(pointLight);
 
             scene.fog = null;
@@ -743,7 +753,7 @@
 
             const startX = camera.position.x;
             const startZ = camera.position.z;
-            pointLight.position.set(startX, 2, startZ);
+            pointLight.position.set(startX, lightingConfig.pointLightHeight, startZ);
 
             if (path && pathIndex < path.length) {
                 const targetGrid = path[pathIndex];
