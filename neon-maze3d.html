@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.01</title>
+    <title>3D Neon Maze - v4.02</title>
     <style>
         body {
             margin: 0;
@@ -80,6 +80,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.02 - Factored out material and color variables into a materialConfig object with documentation
          * Version 4.01 - Factored out lighting variables into a lightingConfig object with documentation
          * Version 4.0  - Updated to major version 4.0 with no functional changes
          * Version 3.59 - Added configurable loops and increased dead-end paths in maze generation for higher difficulty
@@ -89,18 +90,17 @@
          * Version 3.55 - Adjusted mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
          * Version 3.54 - Adjusted maze size by difficulty: Easy (50x50), Medium (75x75), Hard (100x100)
          * Version 3.53 - Ensured distinct wall/floor colors, added neon palette
-         * Version 3.52 - Switched to iterative stack-based backtracking
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 3.59 -> 3.60) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.02 -> 4.03) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
-         * 4. Generate a Git commit command and include it below the changelog.
+         * 4. Generate a Git commit command prefixed with "Version X.XX:" (e.g., "Version 4.03:") followed by the description and include it below the changelog.
          * 5. Do not remove these instructions in future updates.
          * 6. Do not remove comments that document variables and code logic.
          *
          * Git Commit Command for this change:
-         * git commit -m "Factored out lighting variables into a lightingConfig object with documentation" neon-maze3d.html
+         * git commit -m "Version 4.02: Factored out material and color variables into a materialConfig object with documentation" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -159,6 +159,24 @@
             pointLightIntensity: 50,      // Intensity of the point light (affects brightness and reach)
             pointLightDistance: 25,       // Maximum distance the point light affects (in world units)
             pointLightHeight: 2           // Height above the player where the point light is positioned
+        };
+
+        // Material and color configuration constants
+        const materialConfig = {
+            neonColors: [
+                0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa,
+                0xff5500, 0x5500ff, 0xff0055, 0x00ff00, 0x0055ff
+            ],                            // Array of neon colors for walls and floor/ceiling
+            wallEmissiveIntensity: 0.5,   // Emissive intensity for wall material (glow effect)
+            wallShininess: 30,            // Shininess of wall material for reflective highlights
+            floorCeilingEmissiveIntensity: 0.5, // Emissive intensity for floor/ceiling material
+            floorCeilingShininess: 10,    // Shininess of floor/ceiling material
+            startMarkerColor: 0x00ff00,   // Color of the start marker (green)
+            finishMarkerColor: 0xff0000,  // Color of the finish marker (red)
+            markerShininess: 150,         // Shininess of start/finish markers
+            markerSize: 0.3,              // Size of start/finish marker spheres
+            pathMarkerColor: 0x00ffff,    // Color of path debug markers (cyan)
+            pathMarkerSize: 0.05          // Size of path debug marker spheres
         };
 
         let currentDifficulty = difficulties.easy;
@@ -282,33 +300,27 @@
         }
 
         function renderMaze() {
-            const neonColors = [
-                0xff00ff, 0x00ffff, 0xffff00, 0xff00aa, 0x00ffaa,
-                0xff5500, 0x5500ff, 0xff0055, 0x00ff00, 0x0055ff
-            ];
-            const wallColor = neonColors[Math.floor(Math.random() * neonColors.length)];
-            const availableFloorColors = neonColors.filter(color => color !== wallColor);
+            const wallColor = materialConfig.neonColors[Math.floor(Math.random() * materialConfig.neonColors.length)];
+            const availableFloorColors = materialConfig.neonColors.filter(color => color !== wallColor);
             const floorCeilingColor = availableFloorColors[Math.floor(Math.random() * availableFloorColors.length)];
 
             wallMaterials.wall = new THREE.MeshPhongMaterial({
                 color: wallColor,
                 emissive: wallColor,
-                emissiveIntensity: 0.5,
-                shininess: 100,
+                emissiveIntensity: materialConfig.wallEmissiveIntensity,
+                shininess: materialConfig.wallShininess,
                 opacity: 1.0,
                 transparent: false,
-                side: THREE.DoubleSide,
-                shininess: 30
+                side: THREE.DoubleSide
             });
             wallMaterials.floorCeiling = new THREE.MeshPhongMaterial({
                 color: floorCeilingColor,
                 emissive: floorCeilingColor,
-                emissiveIntensity: 0.5,
-                shininess: 100,
+                emissiveIntensity: materialConfig.floorCeilingEmissiveIntensity,
+                shininess: materialConfig.floorCeilingShininess,
                 opacity: 1.0,
                 transparent: false,
-                side: THREE.DoubleSide,
-                shininess: 10
+                side: THREE.DoubleSide
             });
 
             walls.clear();
@@ -323,16 +335,22 @@
             ceiling.position.set(0, config.cellSize / 2 - config.wallThickness / 2, 0);
             scene.add(ceiling);
 
-            const startMarkerGeometry = new THREE.SphereGeometry(0.3);
-            const startMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00, shininess: 150 });
+            const startMarkerGeometry = new THREE.SphereGeometry(materialConfig.markerSize);
+            const startMarkerMaterial = new THREE.MeshPhongMaterial({
+                color: materialConfig.startMarkerColor,
+                shininess: materialConfig.markerShininess
+            });
             startMarker = new THREE.Mesh(startMarkerGeometry, startMarkerMaterial);
             const startX = start.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
             const startZ = start.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
             startMarker.position.set(startX, 0, startZ);
             scene.add(startMarker);
 
-            const finishMarkerGeometry = new THREE.SphereGeometry(0.3);
-            const finishMarkerMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000, shininess: 150 });
+            const finishMarkerGeometry = new THREE.SphereGeometry(materialConfig.markerSize);
+            const finishMarkerMaterial = new THREE.MeshPhongMaterial({
+                color: materialConfig.finishMarkerColor,
+                shininess: materialConfig.markerShininess
+            });
             finishMarker = new THREE.Mesh(finishMarkerGeometry, finishMarkerMaterial);
             const finishX = finish.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2;
             const finishZ = finish.z * config.cellSize - mazeHeight * config.cellSize / 2 + config.cellSize / 2;
@@ -660,8 +678,8 @@
             if (path && document.body.classList.contains('debug-path')) {
                 path.forEach(node => {
                     const marker = new THREE.Mesh(
-                        new THREE.SphereGeometry(0.05),
-                        new THREE.MeshBasicMaterial({ color: 0x00ffff })
+                        new THREE.SphereGeometry(materialConfig.pathMarkerSize),
+                        new THREE.MeshBasicMaterial({ color: materialConfig.pathMarkerColor })
                     );
                     marker.position.set(
                         node.x * config.cellSize - mazeWidth * config.cellSize / 2 + config.cellSize / 2,
