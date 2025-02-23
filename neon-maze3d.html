@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.05</title>
+    <title>3D Neon Maze - v4.06</title>
     <style>
         body {
             margin: 0;
@@ -82,6 +82,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.06 - Fixed A* pathfinding with debugged PriorityQueue and path following
          * Version 4.05 - Fixed A* pathfinding with improved PriorityQueue implementation
          * Version 4.04 - Added PriorityQueue to A* pathfinding for better performance on large mazes
          * Version 4.03 - Complete refactor: modular structure, improved performance, better code organization
@@ -91,10 +92,9 @@
          * Version 3.59 - Added configurable loops and increased dead-end paths in maze generation for higher difficulty
          * Version 3.58 - Rotated player to face an open direction (not a wall) at start, corrected yaw alignment
          * Version 3.57 - Refined touch controls: swipe up and hold to move forward, swipe left/right to rotate
-         * Version 3.56 - Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.05 -> 4.06) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.06 -> 4.07) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
@@ -102,7 +102,7 @@
          * 6. Do not remove comments that document variables and code logic.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.05: Fixed A* pathfinding with improved PriorityQueue implementation" neon-maze3d.html
+         * git commit -m "Version 4.06: Fixed A* pathfinding with debugged PriorityQueue and path following" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -164,21 +164,12 @@
 
             // Add an item with priority to the queue
             push(node, priority) {
-                const item = { node, priority };
-                let added = false;
-                for (let i = 0; i < this.items.length; i++) {
-                    if (this.items[i].priority > priority) {
-                        this.items.splice(i, 0, item);
-                        added = true;
-                        break;
-                    }
-                }
-                if (!added) {
-                    this.items.push(item);
-                }
+                const item = { node: { x: node.x, z: node.z }, priority }; // Create new object to avoid reference issues
+                this.items.push(item);
+                this.items.sort((a, b) => a.priority - b.priority); // Sort by priority (ascending)
             }
 
-            // Remove and return the highest priority item's node
+            // Remove and return the highest priority item's node (lowest value = highest priority)
             pop() {
                 if (this.isEmpty()) return null;
                 return this.items.shift().node;
@@ -194,9 +185,13 @@
                 const key = `${node.x},${node.z}`;
                 const index = this.items.findIndex(item => `${item.node.x},${item.node.z}` === key);
                 if (index !== -1) {
-                    this.items.splice(index, 1); // Remove old entry
+                    if (this.items[index].priority > priority) {
+                        this.items[index].priority = priority;
+                        this.items.sort((a, b) => a.priority - b.priority);
+                    }
+                } else {
+                    this.push(node, priority);
                 }
-                this.push(node, priority);
             }
 
             // Check if node exists in queue
@@ -948,17 +943,30 @@
                 if (!this.gameActive) return;
                 if (this.path) {
                     this.path = null;
+                    this.pathIndex = 0;
                     this.velocity.set(0, 0, 0);
                     this.renderPathMarkers();
                 } else {
                     const { mazeWidth, mazeHeight } = this.currentDifficulty;
                     const startX = Math.floor((this.camera.position.x + mazeWidth * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize);
                     const startZ = Math.floor((this.camera.position.z + mazeHeight * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize);
-                    this.path = this.aStarPathfinding({ x: startX, z: startZ }, this.finish);
-                    this.pathIndex = 0;
-                    this.input = { forward: false, backward: false, left: false, right: false };
-                    this.velocity.set(0, 0, 0);
-                    this.renderPathMarkers();
+                    const start = { x: startX, z: startZ };
+
+                    // Validate start position
+                    if (startX < 0 || startX >= mazeWidth || startZ < 0 || startZ >= mazeHeight) {
+                        console.error("Invalid start position:", start);
+                        return;
+                    }
+
+                    this.path = this.aStarPathfinding(start, this.finish);
+                    if (this.path) {
+                        this.pathIndex = 0;
+                        this.input = { forward: false, backward: false, left: false, right: false };
+                        this.velocity.set(0, 0, 0);
+                        this.renderPathMarkers();
+                    } else {
+                        console.error("No path found from", start, "to", this.finish);
+                    }
                 }
             }
 
@@ -996,43 +1004,41 @@
                 }
             }
 
-            // Optimized A* pathfinding using PriorityQueue
+            // A* pathfinding algorithm with PriorityQueue
             aStarPathfinding(start, end) {
-                // Priority queue for open set, sorted by fScore
                 const openSet = new PriorityQueue();
                 const cameFrom = new Map();  // Track path reconstruction
                 const gScore = new Map();    // Cost from start to node
                 const fScore = new Map();    // Estimated total cost through node
+                const visited = new Set();   // Track visited nodes
 
                 // Initialize starting node
-                gScore.set(`${start.x},${start.z}`, 0);
-                fScore.set(`${start.x},${start.z}`, this.heuristic(start, end));
-                openSet.push(start, fScore.get(`${start.x},${start.z}`));
+                const startKey = `${start.x},${start.z}`;
+                gScore.set(startKey, 0);
+                fScore.set(startKey, this.heuristic(start, end));
+                openSet.push(start, fScore.get(startKey));
 
                 while (!openSet.isEmpty()) {
                     const current = openSet.pop();
+                    const currentKey = `${current.x},${current.z}`;
+
+                    if (visited.has(currentKey)) continue;
+                    visited.add(currentKey);
 
                     if (current.x === end.x && current.z === end.z) {
                         return this.reconstructPath(cameFrom, current);
                     }
 
                     for (const neighbor of this.getNeighbors(current)) {
-                        const tentativeGScore = (gScore.get(`${current.x},${current.z}`) || Infinity) + 1;
                         const neighborKey = `${neighbor.x},${neighbor.z}`;
+                        const tentativeGScore = gScore.get(currentKey) + 1;
 
-                        if (tentativeGScore < (gScore.get(neighborKey) || Infinity)) {
-                            // Update path and scores
-                            cameFrom.set(neighborKey, current);
+                        if (!gScore.has(neighborKey) || tentativeGScore < gScore.get(neighborKey)) {
+                            cameFrom.set(neighborKey, { x: current.x, z: current.z });
                             gScore.set(neighborKey, tentativeGScore);
                             const fScoreValue = tentativeGScore + this.heuristic(neighbor, end);
                             fScore.set(neighborKey, fScoreValue);
-
-                            // Update or add to priority queue
-                            if (openSet.has(neighbor)) {
-                                openSet.update(neighbor, fScoreValue);
-                            } else {
-                                openSet.push(neighbor, fScoreValue);
-                            }
+                            openSet.update(neighbor, fScoreValue);
                         }
                     }
                 }
@@ -1048,7 +1054,7 @@
             getNeighbors(pos) {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
                 const neighbors = [];
-                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]]; // N, E, S, W
                 for (const [dx, dz] of directions) {
                     const nx = pos.x + dx;
                     const nz = pos.z + dz;
@@ -1064,10 +1070,12 @@
 
             // Reconstruct path from A* results
             reconstructPath(cameFrom, current) {
-                const path = [current];
-                while (cameFrom.has(`${current.x},${current.z}`)) {
-                    current = cameFrom.get(`${current.x},${current.z}`);
-                    path.unshift(current);
+                const path = [{ x: current.x, z: current.z }];
+                let currentKey = `${current.x},${current.z}`;
+                while (cameFrom.has(currentKey)) {
+                    const next = cameFrom.get(currentKey);
+                    path.unshift({ x: next.x, z: next.z });
+                    currentKey = `${next.x},${next.z}`;
                 }
                 return path;
             }
