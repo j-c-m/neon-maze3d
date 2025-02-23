@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.04</title>
+    <title>3D Neon Maze - v4.05</title>
     <style>
         body {
             margin: 0;
@@ -82,6 +82,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.05 - Fixed A* pathfinding with improved PriorityQueue implementation
          * Version 4.04 - Added PriorityQueue to A* pathfinding for better performance on large mazes
          * Version 4.03 - Complete refactor: modular structure, improved performance, better code organization
          * Version 4.02 - Factored out material and color variables into a materialConfig object with documentation
@@ -91,10 +92,9 @@
          * Version 3.58 - Rotated player to face an open direction (not a wall) at start, corrected yaw alignment
          * Version 3.57 - Refined touch controls: swipe up and hold to move forward, swipe left/right to rotate
          * Version 3.56 - Factored difficulty into a config block; maxSpeed and pathSpeed constant at 0.8; dynamic menu
-         * Version 3.55 - Adjusted mazes: Easy (25x25) ~1min, Medium (75x75) ~3min, Hard (350x350) ~15min
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.04 -> 4.05) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.05 -> 4.06) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
@@ -102,7 +102,7 @@
          * 6. Do not remove comments that document variables and code logic.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.04: Added PriorityQueue to A* pathfinding for better performance on large mazes" neon-maze3d.html
+         * git commit -m "Version 4.05: Fixed A* pathfinding with improved PriorityQueue implementation" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -158,25 +158,51 @@
 
         // Priority Queue implementation for A* pathfinding
         class PriorityQueue {
-            constructor(comparator) {
-                this.items = [];           // Array to store queue items
-                this.comparator = comparator; // Function to compare items for priority
+            constructor() {
+                this.items = [];           // Array to store queue items with {node, priority}
             }
 
-            // Add an item to the queue
-            push(item) {
-                this.items.push(item);
-                this.items.sort(this.comparator);
+            // Add an item with priority to the queue
+            push(node, priority) {
+                const item = { node, priority };
+                let added = false;
+                for (let i = 0; i < this.items.length; i++) {
+                    if (this.items[i].priority > priority) {
+                        this.items.splice(i, 0, item);
+                        added = true;
+                        break;
+                    }
+                }
+                if (!added) {
+                    this.items.push(item);
+                }
             }
 
-            // Remove and return the highest priority item
+            // Remove and return the highest priority item's node
             pop() {
-                return this.items.shift();
+                if (this.isEmpty()) return null;
+                return this.items.shift().node;
             }
 
             // Check if queue is empty
             isEmpty() {
                 return this.items.length === 0;
+            }
+
+            // Update priority of an existing node or add if not present
+            update(node, priority) {
+                const key = `${node.x},${node.z}`;
+                const index = this.items.findIndex(item => `${item.node.x},${item.node.z}` === key);
+                if (index !== -1) {
+                    this.items.splice(index, 1); // Remove old entry
+                }
+                this.push(node, priority);
+            }
+
+            // Check if node exists in queue
+            has(node) {
+                const key = `${node.x},${node.z}`;
+                return this.items.some(item => `${item.node.x},${item.node.z}` === key);
             }
         }
 
@@ -973,19 +999,15 @@
             // Optimized A* pathfinding using PriorityQueue
             aStarPathfinding(start, end) {
                 // Priority queue for open set, sorted by fScore
-                const openSet = new PriorityQueue((a, b) =>
-                    (this.fScore.get(`${a.x},${a.z}`) || Infinity) -
-                    (this.fScore.get(`${b.x},${b.z}`) || Infinity)
-                );
-                openSet.push(start);
-
+                const openSet = new PriorityQueue();
                 const cameFrom = new Map();  // Track path reconstruction
                 const gScore = new Map();    // Cost from start to node
                 const fScore = new Map();    // Estimated total cost through node
-                this.fScore = fScore;       // Store for priority queue access
 
+                // Initialize starting node
                 gScore.set(`${start.x},${start.z}`, 0);
                 fScore.set(`${start.x},${start.z}`, this.heuristic(start, end));
+                openSet.push(start, fScore.get(`${start.x},${start.z}`));
 
                 while (!openSet.isEmpty()) {
                     const current = openSet.pop();
@@ -996,14 +1018,20 @@
 
                     for (const neighbor of this.getNeighbors(current)) {
                         const tentativeGScore = (gScore.get(`${current.x},${current.z}`) || Infinity) + 1;
-                        const key = `${neighbor.x},${neighbor.z}`;
+                        const neighborKey = `${neighbor.x},${neighbor.z}`;
 
-                        if (tentativeGScore < (gScore.get(key) || Infinity)) {
-                            cameFrom.set(key, current);
-                            gScore.set(key, tentativeGScore);
-                            fScore.set(key, tentativeGScore + this.heuristic(neighbor, end));
-                            if (!openSet.items.some(n => n.x === neighbor.x && n.z === neighbor.z)) {
-                                openSet.push(neighbor);
+                        if (tentativeGScore < (gScore.get(neighborKey) || Infinity)) {
+                            // Update path and scores
+                            cameFrom.set(neighborKey, current);
+                            gScore.set(neighborKey, tentativeGScore);
+                            const fScoreValue = tentativeGScore + this.heuristic(neighbor, end);
+                            fScore.set(neighborKey, fScoreValue);
+
+                            // Update or add to priority queue
+                            if (openSet.has(neighbor)) {
+                                openSet.update(neighbor, fScoreValue);
+                            } else {
+                                openSet.push(neighbor, fScoreValue);
                             }
                         }
                     }
