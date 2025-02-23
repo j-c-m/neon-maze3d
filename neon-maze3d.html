@@ -92,8 +92,8 @@
          * 5. Do not remove these instructions in future updates.
          * 6. Do not remove comments that document variables and code logic.
          *
-         * Git Commit Command for Version 4.0:
-         * git commit -m "Version 4.0: Updated to major version 4.0 with no functional changes" neon-maze3d.html
+         * Git Commit Command for this change:
+         * git commit -m "Refactored safeDistance to global scope for consistency across movement logic, no version increment" neon-maze3d.html
          */
 
         const scene = new THREE.Scene();
@@ -137,6 +137,7 @@
         const wallThickness = 0.01;
         const maxSpeed = 0.8;
         const pathSpeed = 0.8;
+        const safeDistance = wallThickness + 0.25; // Moved to global scope for consistency
         let maze = [], walls = new Map(), floor, ceiling, startMarker, finishMarker;
         let gameActive = false, startTime, score = 0;
         let start = { x: 0, z: 0 }, finish;
@@ -745,10 +746,9 @@
                 raycaster.set(camera.position, forward);
                 const intersects = raycaster.intersectObjects(wallMeshes);
 
-                if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + wallThickness + 0.25) {
+                if (intersects.length > 0 && intersects[0].distance <= moveStep.length() + safeDistance) {
                     const hitPoint = intersects[0].point;
                     const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
-                    const safeDistance = wallThickness + 0.25;
                     newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(safeDistance));
                 }
 
@@ -790,7 +790,6 @@
                     ];
 
                     let finalMove = moveStep.clone();
-                    const safeDistance = wallThickness + 0.25;
 
                     for (const dir of checkDirections) {
                         raycaster.set(camera.position, dir);
