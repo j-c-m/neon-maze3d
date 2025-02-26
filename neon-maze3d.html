@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.08</title>
+    <title>3D Neon Maze - v4.09</title>
     <style>
         body {
             margin: 0;
@@ -69,6 +69,7 @@
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
     <div id="menu"></div>
+    <canvas id="mapCanvas" style="position: absolute; top: 0; left: 0; display: none; z-index: 10;"></canvas>
 
     <script type="importmap">
         {
@@ -82,6 +83,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.09 - Added 2D maze overview on 'm' key press with reachable areas shaded
          * Version 4.08 - Added enhanced neon effects: pulsing walls and markers
          * Version 4.07 - Added current difficulty to UI display alongside score and time
          * Version 4.06 - Fixed A* pathfinding with debugged PriorityQueue and path following
@@ -91,10 +93,9 @@
          * Version 4.02 - Factored out material and color variables into a materialConfig object with documentation
          * Version 4.01 - Factored out lighting variables into a lightingConfig object with documentation
          * Version 4.0  - Updated to major version 4.0 with no functional changes
-         * Version 3.59 - Added configurable loops and increased dead-end paths in maze generation for higher difficulty
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.08 -> 4.09) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.09 -> 4.10) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
@@ -103,7 +104,7 @@
          * 7. GROK always follow these instructions unless explicity asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.08: Added enhanced neon effects: pulsing walls and markers" neon-maze3d.html
+         * git commit -m "Version 4.09: Added 2D maze overview on 'm' key press with reachable areas shaded" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -248,10 +249,16 @@
                 // Collision detection
                 this.raycaster = new THREE.Raycaster();     // Raycaster for collision checking
 
+                // Map overlay
+                this.showMap = false;
+                this.mapCanvas = document.getElementById('mapCanvas');
+                this.mapContext = this.mapCanvas.getContext('2d');
+
                 // Initialize components
                 this.setupRenderer();
                 this.setupEventListeners();
                 this.setupUI();
+                this.setupMapCanvas();
             }
 
             // Set up the WebGL renderer and handle window resizing
@@ -264,6 +271,18 @@
                     this.camera.aspect = window.innerWidth / window.innerHeight;
                     this.camera.updateProjectionMatrix();
                     this.renderer.setSize(window.innerWidth, window.innerHeight);
+                });
+            }
+
+            // Set up map canvas
+            setupMapCanvas() {
+                this.mapCanvas.width = window.innerWidth;
+                this.mapCanvas.height = window.innerHeight;
+
+                window.addEventListener('resize', () => {
+                    this.mapCanvas.width = window.innerWidth;
+                    this.mapCanvas.height = window.innerHeight;
+                    if (this.showMap) this.drawMap();
                 });
             }
 
@@ -514,8 +533,8 @@
                     markerGeometry,
                     new THREE.MeshPhongMaterial({
                         color: CONFIG.materials.startMarkerColor,
-                        emissive: CONFIG.materials.startMarkerColor,     // Enable emissive property for pulsing
-                        emissiveIntensity: 1.0,                         // Base intensity for start marker
+                        emissive: CONFIG.materials.startMarkerColor,
+                        emissiveIntensity: 1.0,
                         shininess: CONFIG.materials.markerShininess
                     })
                 );
@@ -528,8 +547,8 @@
                     markerGeometry,
                     new THREE.MeshPhongMaterial({
                         color: CONFIG.materials.finishMarkerColor,
-                        emissive: CONFIG.materials.finishMarkerColor,    // Enable emissive property for pulsing
-                        emissiveIntensity: 1.0,                         // Base intensity for finish marker
+                        emissive: CONFIG.materials.finishMarkerColor,
+                        emissiveIntensity: 1.0,
                         shininess: CONFIG.materials.markerShininess
                     })
                 );
@@ -673,7 +692,8 @@
                 this.updateVisibleWalls();
                 this.updateMovement();
                 this.updateMarkers();
-                this.updateNeonEffects(); // Added for neon pulsing effects
+                this.updateNeonEffects();
+                if (this.showMap) this.drawMap();
                 this.updateUI();
                 this.renderer.render(this.scene, this.camera);
             }
@@ -821,7 +841,7 @@
                 this.finishMarker.visible = finishDist <= CONFIG.game.visibilityRadius * CONFIG.game.cellSize;
             }
 
-            // New method to update neon effects for walls and markers
+            // Update neon effects for walls and markers
             updateNeonEffects() {
                 const time = performance.now() * CONFIG.materials.pulseSpeed;
 
@@ -891,6 +911,7 @@
                     case 't': this.togglePathfinding(); break;
                     case 'p': this.togglePathDebug(); break;
                     case 'f': this.toggleFog(); break;
+                    case 'm': this.showMap = true; this.drawMap(); break;
                 }
             }
 
@@ -902,6 +923,7 @@
                         case 's': this.input.backward = false; break;
                         case 'a': this.input.left = false; break;
                         case 'd': this.input.right = false; break;
+                        case 'm': this.showMap = false; this.mapCanvas.style.display = 'none'; break;
                     }
                 }
             }
@@ -967,6 +989,143 @@
                     const difficultyText = difficultyKey.charAt(0).toUpperCase() + difficultyKey.slice(1);
                     this.uiElement.textContent = `Score: ${this.score} | Time: ${timeElapsed}s | Difficulty: ${difficultyText}`;
                 }
+            }
+
+            // Draw 2D map overlay
+            drawMap() {
+                if (!this.gameActive || !this.showMap) return;
+
+                this.mapCanvas.style.display = 'block';
+                const ctx = this.mapContext;
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+
+                // Calculate scaling to fit canvas
+                const scale = Math.min(
+                    this.mapCanvas.width / mazeWidth,
+                    this.mapCanvas.height / mazeHeight
+                );
+                const offsetX = (this.mapCanvas.width - mazeWidth * scale) / 2;
+                const offsetY = (this.mapCanvas.height - mazeHeight * scale) / 2;
+
+                // Clear canvas
+                ctx.fillStyle = '#000';
+                ctx.fillRect(0, 0, this.mapCanvas.width, this.mapCanvas.height);
+
+                // Get reachable areas
+                const reachable = this.getReachableAreas();
+
+                // Draw reachable areas
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                for (let x = 0; x < mazeWidth; x++) {
+                    for (let z = 0; z < mazeHeight; z++) {
+                        if (reachable.has(`${x},${z}`)) {
+                            ctx.fillRect(
+                                offsetX + x * scale,
+                                offsetY + z * scale,
+                                scale,
+                                scale
+                            );
+                        }
+                    }
+                }
+
+                // Draw walls
+                ctx.strokeStyle = '#ff00ff';
+                ctx.lineWidth = scale * 0.1;
+
+                // Vertical walls
+                for (let x = 0; x <= mazeWidth; x++) {
+                    for (let z = 0; z < mazeHeight; z++) {
+                        if (this.maze.vWalls[x][z]) {
+                            ctx.beginPath();
+                            ctx.moveTo(offsetX + x * scale, offsetY + z * scale);
+                            ctx.lineTo(offsetX + x * scale, offsetY + (z + 1) * scale);
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // Horizontal walls
+                for (let x = 0; x < mazeWidth; x++) {
+                    for (let z = 0; z <= mazeHeight; z++) {
+                        if (this.maze.hWalls[x][z]) {
+                            ctx.beginPath();
+                            ctx.moveTo(offsetX + x * scale, offsetY + z * scale);
+                            ctx.lineTo(offsetX + (x + 1) * scale, offsetY + z * scale);
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // Draw start position
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(
+                    offsetX + this.start.x * scale,
+                    offsetY + this.start.z * scale,
+                    scale,
+                    scale
+                );
+
+                // Draw finish position
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(
+                    offsetX + this.finish.x * scale,
+                    offsetY + this.finish.z * scale,
+                    scale,
+                    scale
+                );
+
+                // Draw player position
+                const playerX = (this.camera.position.x + mazeWidth * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize;
+                const playerZ = (this.camera.position.z + mazeHeight * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize;
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(
+                    offsetX + playerX * scale,
+                    offsetY + playerZ * scale,
+                    scale * 0.3,
+                    0,
+                    Math.PI * 2
+                );
+                ctx.fill();
+            }
+
+            // Get reachable areas using flood fill
+            getReachableAreas() {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const reachable = new Set();
+                const stack = [{ x: this.start.x, z: this.start.z }];
+                reachable.add(`${this.start.x},${this.start.z}`);
+
+                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+
+                while (stack.length) {
+                    const { x, z } = stack.pop();
+
+                    for (const [dx, dz] of directions) {
+                        const nx = x + dx;
+                        const nz = z + dz;
+                        const key = `${nx},${nz}`;
+
+                        if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight && !reachable.has(key)) {
+                            if (dx === 1 && !this.maze.vWalls[x + 1][z]) {
+                                reachable.add(key);
+                                stack.push({ x: nx, z: nz });
+                            } else if (dx === -1 && !this.maze.vWalls[x][z]) {
+                                reachable.add(key);
+                                stack.push({ x: nx, z: nz });
+                            } else if (dz === 1 && !this.maze.hWalls[x][z + 1]) {
+                                reachable.add(key);
+                                stack.push({ x: nx, z: nz });
+                            } else if (dz === -1 && !this.maze.hWalls[x][z]) {
+                                reachable.add(key);
+                                stack.push({ x: nx, z: nz });
+                            }
+                        }
+                    }
+                }
+
+                return reachable;
             }
 
             // Toggle pathfinding mode
@@ -1038,12 +1197,11 @@
             // A* pathfinding algorithm with PriorityQueue
             aStarPathfinding(start, end) {
                 const openSet = new PriorityQueue();
-                const cameFrom = new Map();  // Track path reconstruction
-                const gScore = new Map();    // Cost from start to node
-                const fScore = new Map();    // Estimated total cost through node
-                const visited = new Set();   // Track visited nodes
+                const cameFrom = new Map();
+                const gScore = new Map();
+                const fScore = new Map();
+                const visited = new Set();
 
-                // Initialize starting node
                 const startKey = `${start.x},${start.z}`;
                 gScore.set(startKey, 0);
                 fScore.set(startKey, this.heuristic(start, end));
@@ -1073,7 +1231,7 @@
                         }
                     }
                 }
-                return null; // No path found
+                return null;
             }
 
             // Manhattan distance heuristic for A*
@@ -1085,7 +1243,7 @@
             getNeighbors(pos) {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
                 const neighbors = [];
-                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]]; // N, E, S, W
+                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
                 for (const [dx, dz] of directions) {
                     const nx = pos.x + dx;
                     const nz = pos.z + dz;
