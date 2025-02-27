@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.10</title>
+    <title>3D Neon Maze - v4.11</title>
     <style>
         body {
             margin: 0;
@@ -83,6 +83,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.11 - Changed min wall lengths to 2, 3, 3 for Easy, Medium, Hard; ensured finish reachable; removed unreachable walls
          * Version 4.10 - Added minimum wall lengths of 3, 4, 5 cells for Easy, Medium, Hard difficulties
          * Version 4.09 - Added 2D maze overview on 'm' key press with reachable areas shaded
          * Version 4.08 - Added enhanced neon effects: pulsing walls and markers
@@ -92,7 +93,6 @@
          * Version 4.04 - Added PriorityQueue to A* pathfinding for better performance on large mazes
          * Version 4.03 - Complete refactor: modular structure, improved performance, better code organization
          * Version 4.02 - Factored out material and color variables into a materialConfig object with documentation
-         * Version 4.01 - Factored out lighting variables into a lightingConfig object with documentation
          *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 4.10 -> 4.11) in the <title> and changelog.
@@ -104,7 +104,7 @@
          * 7. GROK always follow these instructions unless explicity asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.10: Added minimum wall lengths of 3, 4, 5 cells for Easy, Medium, Hard difficulties" neon-maze3d.html
+         * git commit -m "Version 4.11: Changed min wall lengths to 2, 3, 3 for Easy, Medium, Hard; ensured finish reachable; removed unreachable walls" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -185,7 +185,7 @@
 
             // Add an item with priority to the queue
             push(node, priority) {
-                const item = { node: { x: node.x, z: node.z }, priority }; // Create new object to avoid reference issues
+                const items = { node: { x: node.x, z: node.z }, priority }; // Create new object to avoid reference issues
                 this.items.push(item);
                 this.items.sort((a, b) => a.priority - b.priority); // Sort by priority (ascending)
             }
@@ -394,8 +394,9 @@
                 const stack = [{ x: 0, z: 0 }];
                 const visited = new Set(['0,0']);
                 this.maze.data[0][0] = 1;
+                this.finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
 
-                // Generate maze paths
+                // Generate initial maze paths
                 while (stack.length) {
                     const current = stack[stack.length - 1];
                     const neighbors = this.getUnvisitedNeighbors(current, visited, directions, directionBias);
@@ -449,7 +450,67 @@
                 }
 
                 this.addLoops(mazeWidth, mazeHeight, loopProbability);
-                this.finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
+
+                // Ensure finish is reachable
+                const reachable = this.getReachableAreas();
+                if (!reachable.has(`${this.finish.x},${this.finish.z}`)) {
+                    this.ensureFinishReachable(visited);
+                }
+
+                // Remove unreachable walls
+                this.removeUnreachableWalls(reachable);
+            }
+
+            // Ensure finish is reachable by carving a path if needed
+            ensureFinishReachable(visited) {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                let currentX = this.finish.x;
+                let currentZ = this.finish.z;
+
+                while (!visited.has(`${currentX},${currentZ}`)) {
+                    // Move towards start (0,0) until we hit a visited cell
+                    const dx = currentX > 0 ? -1 : 0;
+                    const dz = currentZ > 0 ? -1 : 0;
+                    const nextX = currentX + dx;
+                    const nextZ = currentZ + dz;
+
+                    if (dx === -1) this.maze.vWalls[currentX][currentZ] = false;
+                    else if (dz === -1) this.maze.hWalls[currentX][currentZ] = false;
+
+                    this.maze.data[currentX][currentZ] = 1;
+                    visited.add(`${currentX},${currentZ}`);
+                    currentX = nextX;
+                    currentZ = nextZ;
+                }
+            }
+
+            // Remove walls not connected to reachable areas
+            removeUnreachableWalls(reachable) {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+
+                for (let x = 0; x <= mazeWidth; x++) {
+                    for (let z = 0; z < mazeHeight; z++) {
+                        if (this.maze.vWalls[x][z]) {
+                            const left = `${x-1},${z}`;
+                            const right = `${x},${z}`;
+                            if (!reachable.has(left) && !reachable.has(right)) {
+                                this.maze.vWalls[x][z] = false;
+                            }
+                        }
+                    }
+                }
+
+                for (let x = 0; x < mazeWidth; x++) {
+                    for (let z = 0; z <= mazeHeight; z++) {
+                        if (this.maze.hWalls[x][z]) {
+                            const up = `${x},${z-1}`;
+                            const down = `${x},${z}`;
+                            if (!reachable.has(up) && !reachable.has(down)) {
+                                this.maze.hWalls[x][z] = false;
+                            }
+                        }
+                    }
+                }
             }
 
             // Get unvisited neighboring cells
