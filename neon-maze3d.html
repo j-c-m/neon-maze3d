@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.15</title>
+    <title>3D Neon Maze - v4.16</title>
     <style>
         body {
             margin: 0;
@@ -65,7 +65,6 @@
     </style>
 </head>
 <body>
-    <!-- Updated UI to include FPS display -->
     <div id="ui">Score: 0 | Time: 0s | Difficulty: Easy | FPS: 0</div>
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
@@ -84,6 +83,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.16 - Reworked pathSpeed and maxSpeed to cells/s (initially 4 cells/s) with delta-time normalization
          * Version 4.15 - Added FPS display to UI with real-time updates
          * Version 4.14 - Moved start to maze center, finish randomly placed in one of 4 corners
          * Version 4.13 - Ensured finish reachability by A* carving from closest reachable cell to finish
@@ -93,10 +93,9 @@
          * Version 4.09 - Added 2D maze overview on 'm' key press with reachable areas shaded
          * Version 4.08 - Added enhanced neon effects: pulsing walls and markers
          * Version 4.07 - Added current difficulty to UI display alongside score and time
-         * Version 4.06 - Fixed A* pathfinding with debugged PriorityQueue and path following
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.14 -> 4.15) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.15 -> 4.16) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
@@ -105,7 +104,7 @@
          * 7. GROK always follow these instructions unless explicitly asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.15: Added FPS display to UI with real-time updates" neon-maze3d.html
+         * git commit -m "Version 4.16: Reworked pathSpeed and maxSpeed to cells/s (initially 4 cells/s) with delta-time normalization" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -145,12 +144,12 @@
                 visibilityRadius: 15,       // Distance in cells for rendering walls
                 cellSize: 2,               // Size of each maze cell in world units
                 wallThickness: 0.01,       // Thickness of walls and floor
-                maxSpeed: 0.8,            // Maximum player movement speed
-                pathSpeed: 0.8,           // Speed for auto-path movement
-                safeDistance: 0.26,       // Minimum distance from walls to prevent clipping
-                friction: 0.15,           // Velocity decay rate
-                rotationSpeed: 0.002,     // Mouse rotation speed
-                rotationLerpSpeed: 0.1    // Path-following rotation interpolation speed
+                maxSpeed: 4,               // Maximum player movement speed in cells/s (previously units/frame)
+                pathSpeed: 4,              // Speed for auto-path movement in cells/s (previously units/frame)
+                safeDistance: 0.26,        // Minimum distance from walls to prevent clipping
+                friction: 0.15,            // Velocity decay rate
+                rotationSpeed: 0.002,      // Mouse rotation speed
+                rotationLerpSpeed: 0.1     // Path-following rotation interpolation speed
             },
             lighting: {
                 ambientLightColor: 0xffffff,      // Color of ambient scene light
@@ -276,6 +275,9 @@
                 this.lastFrameTime = performance.now();     // Time of the last FPS update
                 this.frameCount = 0;                        // Number of frames since last update
                 this.fps = 0;                               // Current frames per second
+
+                // Delta time tracking for movement normalization
+                this.lastUpdateTime = performance.now();    // Time of the last frame update
 
                 // Initialize components
                 this.setupRenderer();
@@ -869,26 +871,32 @@
             // Main animation loop
             animate() {
                 if (!this.gameActive) return;
+
+                // Calculate delta time for frame-rate independent movement
+                const currentTime = performance.now();
+                const deltaTime = (currentTime - this.lastUpdateTime) / 1000; // Convert to seconds
+                this.lastUpdateTime = currentTime;
+
                 requestAnimationFrame(() => this.animate());
 
                 this.updateVisibleWalls();
-                this.updateMovement();
+                this.updateMovement(deltaTime); // Pass deltaTime to movement update
                 this.updateMarkers();
                 this.updateNeonEffects();
                 if (this.showMap) this.drawMap();
                 this.updateUI();
-                this.updateFPS(); // Added FPS update to animation loop
+                this.updateFPS();
                 this.renderer.render(this.scene, this.camera);
             }
 
             // Update player movement and game state
-            updateMovement() {
+            updateMovement(deltaTime) {
                 this.pointLight.position.set(this.camera.position.x, CONFIG.lighting.pointLightHeight, this.camera.position.z);
 
                 if (this.path && this.pathIndex < this.path.length) {
-                    this.followPath();
+                    this.followPath(deltaTime);
                 } else {
-                    this.handleManualMovement();
+                    this.handleManualMovement(deltaTime);
                 }
 
                 // Check for finish condition
@@ -902,8 +910,8 @@
                 }
             }
 
-            // Follow the A* generated path
-            followPath() {
+            // Follow the A* generated path, now frame-rate independent
+            followPath(deltaTime) {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
                 const targetGrid = this.path[this.pathIndex];
                 const targetX = targetGrid.x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
@@ -917,9 +925,10 @@
                 );
                 this.camera.quaternion.slerp(targetQuaternion, CONFIG.game.rotationLerpSpeed);
 
-                // Move towards target
+                // Move towards target, speed in cells/s converted to units/s
                 const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
-                const moveStep = forward.multiplyScalar(CONFIG.game.pathSpeed * 0.05);
+                const speedUnitsPerSecond = CONFIG.game.pathSpeed * CONFIG.game.cellSize; // 4 cells/s * 2 units/cell = 8 units/s
+                const moveStep = forward.multiplyScalar(speedUnitsPerSecond * deltaTime); // Distance = speed * time
                 let newPosition = this.camera.position.clone().add(moveStep);
 
                 // Collision check
@@ -940,8 +949,8 @@
                 }
             }
 
-            // Handle manual player movement
-            handleManualMovement() {
+            // Handle manual player movement, now frame-rate independent
+            handleManualMovement(deltaTime) {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
                 const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
                 const right = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion);
@@ -953,15 +962,16 @@
                 if (this.input.left) moveDirection.add(right.clone().negate());
                 if (this.input.right) moveDirection.add(right);
 
-                // Update velocity
+                // Update velocity, speed in cells/s converted to units/s
                 if (moveDirection.length() > 0) {
                     moveDirection.normalize();
-                    this.velocity.copy(moveDirection.multiplyScalar(CONFIG.game.maxSpeed));
+                    const speedUnitsPerSecond = CONFIG.game.maxSpeed * CONFIG.game.cellSize; // 4 cells/s * 2 units/cell = 8 units/s
+                    this.velocity.copy(moveDirection.multiplyScalar(speedUnitsPerSecond));
                 } else {
                     this.velocity.lerp(new THREE.Vector3(0, 0, 0), CONFIG.game.friction);
                 }
 
-                const moveStep = this.velocity.clone().multiplyScalar(0.1);
+                const moveStep = this.velocity.clone().multiplyScalar(deltaTime); // Distance = speed * time
                 let newPosition = this.camera.position.clone();
 
                 if (moveStep.length() > 0) {
@@ -1170,7 +1180,6 @@
                         key => CONFIG.difficulty[key] === this.currentDifficulty
                     );
                     const difficultyText = difficultyKey.charAt(0).toUpperCase() + difficultyKey.slice(1);
-                    // Updated to include FPS in the UI display
                     this.uiElement.textContent = `Score: ${this.score} | Time: ${timeElapsed}s | Difficulty: ${difficultyText} | FPS: ${this.fps}`;
                 }
             }
