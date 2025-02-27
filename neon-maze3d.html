@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.09</title>
+    <title>3D Neon Maze - v4.10</title>
     <style>
         body {
             margin: 0;
@@ -83,6 +83,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.10 - Added minimum wall lengths of 3, 4, 5 cells for Easy, Medium, Hard difficulties
          * Version 4.09 - Added 2D maze overview on 'm' key press with reachable areas shaded
          * Version 4.08 - Added enhanced neon effects: pulsing walls and markers
          * Version 4.07 - Added current difficulty to UI display alongside score and time
@@ -92,10 +93,9 @@
          * Version 4.03 - Complete refactor: modular structure, improved performance, better code organization
          * Version 4.02 - Factored out material and color variables into a materialConfig object with documentation
          * Version 4.01 - Factored out lighting variables into a lightingConfig object with documentation
-         * Version 4.0  - Updated to major version 4.0 with no functional changes
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.09 -> 4.10) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.10 -> 4.11) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
@@ -104,7 +104,7 @@
          * 7. GROK always follow these instructions unless explicity asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.09: Added 2D maze overview on 'm' key press with reachable areas shaded" neon-maze3d.html
+         * git commit -m "Version 4.10: Added minimum wall lengths of 3, 4, 5 cells for Easy, Medium, Hard difficulties" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -118,10 +118,27 @@
                     fogDistance: 8,         // Fog visibility distance
                     directionBias: 0.7,     // Bias for directional maze generation
                     loopProbability: 0.05,  // Chance of creating loops
-                    deadEndProbability: 0.1 // Chance of creating dead ends
+                    deadEndProbability: 0.1,// Chance of creating dead ends
+                    minWallLength: 2       // Minimum wall length before an opening
                 },
-                medium: { mazeWidth: 75, mazeHeight: 75, fogDistance: 6, directionBias: 0.6, loopProbability: 0.15, deadEndProbability: 0.3 },
-                hard: { mazeWidth: 350, mazeHeight: 350, fogDistance: 5, directionBias: 0.4, loopProbability: 0.25, deadEndProbability: 0.5 }
+                medium: {
+                    mazeWidth: 75,
+                    mazeHeight: 75,
+                    fogDistance: 6,
+                    directionBias: 0.6,
+                    loopProbability: 0.15,
+                    deadEndProbability: 0.3,
+                    minWallLength: 3
+                },
+                hard: {
+                    mazeWidth: 350,
+                    mazeHeight: 350,
+                    fogDistance: 5,
+                    directionBias: 0.4,
+                    loopProbability: 0.25,
+                    deadEndProbability: 0.5,
+                    minWallLength: 3
+                }
             },
             game: {
                 visibilityRadius: 15,       // Distance in cells for rendering walls
@@ -359,7 +376,7 @@
 
             // Generate a new maze using recursive backtracking
             generateMaze() {
-                const { mazeWidth, mazeHeight, loopProbability, deadEndProbability, directionBias } = this.currentDifficulty;
+                const { mazeWidth, mazeHeight, loopProbability, deadEndProbability, directionBias, minWallLength } = this.currentDifficulty;
 
                 // Initialize maze arrays
                 this.maze.data = Array(mazeWidth).fill().map(() => Array(mazeHeight).fill(0));
@@ -385,24 +402,47 @@
 
                     if (neighbors.length) {
                         const dir = neighbors[Math.floor(Math.random() * neighbors.length)];
-                        const nx = current.x + dir.dx;
-                        const nz = current.z + dir.dz;
-                        const wx = current.x + dir.wx;
-                        const wz = current.z + dir.wz;
+                        let nx = current.x;
+                        let nz = current.z;
+                        let wallCount = 0;
 
-                        // Remove wall between current and next cell
-                        if (dir.wall === 'v') this.maze.vWalls[wx][wz] = false;
-                        else this.maze.hWalls[wx][wz] = false;
+                        // Extend path while ensuring walls meet minimum length
+                        while (wallCount < minWallLength) {
+                            nx += dir.dx;
+                            nz += dir.dz;
 
-                        this.maze.data[nx][nz] = 1;
-                        visited.add(`${nx},${nz}`);
-                        stack.push({ x: nx, z: nz });
+                            if (nx < 0 || nx >= mazeWidth || nz < 0 || nz >= mazeHeight || visited.has(`${nx},${nz}`)) {
+                                // Backtrack if we hit boundary or visited cell
+                                stack.pop();
+                                break;
+                            }
 
-                        // Add dead ends occasionally
-                        if (Math.random() < deadEndProbability && neighbors.length > 1) {
-                            const extraDir = neighbors[Math.floor(Math.random() * (neighbors.length - 1))];
-                            if (extraDir !== dir) this.addDeadEnd(current, extraDir, visited);
+                            const wx = nx - dir.dx + dir.wx;
+                            const wz = nz - dir.dz + dir.wz;
+
+                            // Remove wall between current and next cell
+                            if (dir.wall === 'v') this.maze.vWalls[wx][wz] = false;
+                            else this.maze.hWalls[wx][wz] = false;
+
+                            this.maze.data[nx][nz] = 1;
+                            visited.add(`${nx},${nz}`);
+                            wallCount++;
+
+                            // Only push to stack after minimum wall length is achieved
+                            if (wallCount === minWallLength) {
+                                stack.push({ x: nx, z: nz });
+                            }
+
+                            // Add dead ends occasionally
+                            if (Math.random() < deadEndProbability && wallCount >= minWallLength && neighbors.length > 1) {
+                                const extraDir = neighbors[Math.floor(Math.random() * (neighbors.length - 1))];
+                                if (extraDir !== dir) this.addDeadEnd({ x: nx, z: nz }, extraDir, visited);
+                            }
                         }
+
+                        // If we couldn't extend to minWallLength, continue to next iteration
+                        if (wallCount < minWallLength) continue;
+
                     } else {
                         stack.pop();
                     }
