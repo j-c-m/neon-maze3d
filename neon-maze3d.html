@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.11</title>
+    <title>3D Neon Maze - v4.12</title>
     <style>
         body {
             margin: 0;
@@ -83,6 +83,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.12 - Fixed maze generation to ensure valid path to finish on all difficulties using A* connection
          * Version 4.11 - Changed min wall lengths to 2, 3, 3 for Easy, Medium, Hard; ensured finish reachable; removed unreachable walls
          * Version 4.10 - Added minimum wall lengths of 3, 4, 5 cells for Easy, Medium, Hard difficulties
          * Version 4.09 - Added 2D maze overview on 'm' key press with reachable areas shaded
@@ -92,10 +93,9 @@
          * Version 4.05 - Fixed A* pathfinding with improved PriorityQueue implementation
          * Version 4.04 - Added PriorityQueue to A* pathfinding for better performance on large mazes
          * Version 4.03 - Complete refactor: modular structure, improved performance, better code organization
-         * Version 4.02 - Factored out material and color variables into a materialConfig object with documentation
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.10 -> 4.11) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.11 -> 4.12) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
@@ -104,7 +104,7 @@
          * 7. GROK always follow these instructions unless explicity asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.11: Changed min wall lengths to 2, 3, 3 for Easy, Medium, Hard; ensured finish reachable; removed unreachable walls" neon-maze3d.html
+         * git commit -m "Version 4.12: Fixed maze generation to ensure valid path to finish on all difficulties using A* connection" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -185,7 +185,7 @@
 
             // Add an item with priority to the queue
             push(node, priority) {
-                const items = { node: { x: node.x, z: node.z }, priority }; // Create new object to avoid reference issues
+                const item = { node: { x: node.x, z: node.z }, priority }; // Create new object to avoid reference issues
                 this.items.push(item);
                 this.items.sort((a, b) => a.priority - b.priority); // Sort by priority (ascending)
             }
@@ -451,37 +451,85 @@
 
                 this.addLoops(mazeWidth, mazeHeight, loopProbability);
 
-                // Ensure finish is reachable
+                // Ensure finish is reachable using A* to connect if needed
                 const reachable = this.getReachableAreas();
                 if (!reachable.has(`${this.finish.x},${this.finish.z}`)) {
-                    this.ensureFinishReachable(visited);
+                    this.ensureFinishReachable();
                 }
 
                 // Remove unreachable walls
-                this.removeUnreachableWalls(reachable);
+                this.removeUnreachableWalls(this.getReachableAreas());
             }
 
-            // Ensure finish is reachable by carving a path if needed
-            ensureFinishReachable(visited) {
+            // Ensure finish is reachable by carving an A* path from start to finish if needed
+            ensureFinishReachable() {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
-                let currentX = this.finish.x;
-                let currentZ = this.finish.z;
+                const path = this.aStarPathfinding(this.start, this.finish);
 
-                while (!visited.has(`${currentX},${currentZ}`)) {
-                    // Move towards start (0,0) until we hit a visited cell
-                    const dx = currentX > 0 ? -1 : 0;
-                    const dz = currentZ > 0 ? -1 : 0;
-                    const nextX = currentX + dx;
-                    const nextZ = currentZ + dz;
+                if (!path) {
+                    // If no path exists, carve one by removing walls along the A* path
+                    const openSet = new PriorityQueue();
+                    const cameFrom = new Map();
+                    const gScore = new Map();
+                    const fScore = new Map();
+                    const visited = new Set();
 
-                    if (dx === -1) this.maze.vWalls[currentX][currentZ] = false;
-                    else if (dz === -1) this.maze.hWalls[currentX][currentZ] = false;
+                    const startKey = `${this.start.x},${this.start.z}`;
+                    gScore.set(startKey, 0);
+                    fScore.set(startKey, this.heuristic(this.start, this.finish));
+                    openSet.push(this.start, fScore.get(startKey));
 
-                    this.maze.data[currentX][currentZ] = 1;
-                    visited.add(`${currentX},${currentZ}`);
-                    currentX = nextX;
-                    currentZ = nextZ;
+                    while (!openSet.isEmpty()) {
+                        const current = openSet.pop();
+                        const currentKey = `${current.x},${current.z}`;
+
+                        if (visited.has(currentKey)) continue;
+                        visited.add(currentKey);
+
+                        if (current.x === this.finish.x && current.z === this.finish.z) {
+                            // Reconstruct and carve path
+                            let node = current;
+                            while (cameFrom.has(`${node.x},${node.z}`)) {
+                                const prev = cameFrom.get(`${node.x},${node.z}`);
+                                if (node.x > prev.x) this.maze.vWalls[node.x][node.z] = false;
+                                else if (node.x < prev.x) this.maze.vWalls[prev.x][prev.z] = false;
+                                else if (node.z > prev.z) this.maze.hWalls[prev.x][node.z] = false;
+                                else if (node.z < prev.z) this.maze.hWalls[prev.x][prev.z] = false;
+                                this.maze.data[node.x][node.z] = 1;
+                                node = prev;
+                            }
+                            break;
+                        }
+
+                        for (const neighbor of this.getNeighbors(current).concat(this.getPotentialNeighbors(current))) {
+                            const neighborKey = `${neighbor.x},${neighbor.z}`;
+                            const tentativeGScore = gScore.get(currentKey) + 1;
+
+                            if (!gScore.has(neighborKey) || tentativeGScore < gScore.get(neighborKey)) {
+                                cameFrom.set(neighborKey, { x: current.x, z: current.z });
+                                gScore.set(neighborKey, tentativeGScore);
+                                const fScoreValue = tentativeGScore + this.heuristic(neighbor, this.finish);
+                                fScore.set(neighborKey, fScoreValue);
+                                openSet.update(neighbor, fScoreValue);
+                            }
+                        }
+                    }
                 }
+            }
+
+            // Get potential neighbors (including through walls) for A* carving
+            getPotentialNeighbors(pos) {
+                const { mazeWidth, mazeHeight } = this.currentDifficulty;
+                const neighbors = [];
+                const directions = [[0, 1], [1, 0], [0, -1], [-1, 0]];
+                for (const [dx, dz] of directions) {
+                    const nx = pos.x + dx;
+                    const nz = pos.z + dz;
+                    if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
+                        neighbors.push({ x: nx, z: nz });
+                    }
+                }
+                return neighbors;
             }
 
             // Remove walls not connected to reachable areas
