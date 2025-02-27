@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.13</title>
+    <title>3D Neon Maze - v4.14</title>
     <style>
         body {
             margin: 0;
@@ -83,6 +83,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.14 - Moved start to maze center, finish randomly placed in one of 4 corners
          * Version 4.13 - Ensured finish reachability by A* carving from closest reachable cell to finish
          * Version 4.12 - Fixed maze generation to ensure valid path to finish on all difficulties using A* connection
          * Version 4.11 - Changed min wall lengths to 2, 3, 3 for Easy, Medium, Hard; ensured finish reachable; removed unreachable walls
@@ -92,19 +93,18 @@
          * Version 4.07 - Added current difficulty to UI display alongside score and time
          * Version 4.06 - Fixed A* pathfinding with debugged PriorityQueue and path following
          * Version 4.05 - Fixed A* pathfinding with improved PriorityQueue implementation
-         * Version 4.04 - Added PriorityQueue to A* pathfinding for better performance on large mazes
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.12 -> 4.13) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.13 -> 4.14) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
          * 5. Do not remove these instructions in future updates.
          * 6. Do not remove comments in areas of the code you are not modifying.
-         * 7. GROK always follow these instructions unless explicity asked to ignore them.
+         * 7. GROK always follow these instructions unless explicitly asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.13: Ensured finish reachability by A* carving from closest reachable cell to finish" neon-maze3d.html
+         * git commit -m "Version 4.14: Moved start to maze center, finish randomly placed in one of 4 corners" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -131,8 +131,8 @@
                     minWallLength: 3
                 },
                 hard: {
-                    mazeWidth: 350,
-                    mazeHeight: 350,
+                    mazeWidth: 200,
+                    mazeHeight: 200,
                     fogDistance: 5,
                     directionBias: 0.4,
                     loopProbability: 0.25,
@@ -383,6 +383,21 @@
                 this.maze.vWalls = Array(mazeWidth + 1).fill().map(() => Array(mazeHeight).fill(true));
                 this.maze.hWalls = Array(mazeWidth).fill().map(() => Array(mazeHeight + 1).fill(true));
 
+                // Set start at center
+                this.start = {
+                    x: Math.floor(mazeWidth / 2),
+                    z: Math.floor(mazeHeight / 2)
+                };
+
+                // Set finish in random corner
+                const corners = [
+                    { x: 0, z: 0 },                    // Top-left
+                    { x: mazeWidth - 1, z: 0 },        // Top-right
+                    { x: 0, z: mazeHeight - 1 },       // Bottom-left
+                    { x: mazeWidth - 1, z: mazeHeight - 1 } // Bottom-right
+                ];
+                this.finish = corners[Math.floor(Math.random() * 4)];
+
                 // Possible movement directions
                 const directions = [
                     { dx: 1, dz: 0, wall: 'v', wx: 1, wz: 0 },  // East
@@ -391,10 +406,9 @@
                     { dx: 0, dz: -1, wall: 'h', wx: 0, wz: 0 }  // North
                 ];
 
-                const stack = [{ x: 0, z: 0 }];
-                const visited = new Set(['0,0']);
-                this.maze.data[0][0] = 1;
-                this.finish = { x: mazeWidth - 1, z: mazeHeight - 1 };
+                const stack = [{ x: this.start.x, z: this.start.z }];
+                const visited = new Set([`${this.start.x},${this.start.z}`]);
+                this.maze.data[this.start.x][this.start.z] = 1;
 
                 // Generate initial maze paths
                 while (stack.length) {
@@ -757,10 +771,10 @@
                     let isOpen = false;
 
                     if (nx >= 0 && nx < mazeWidth && nz >= 0 && nz < mazeHeight) {
-                        if (dir.dx === 1 && !this.maze.vWalls[1][0]) isOpen = true;
-                        else if (dir.dx === -1 && !this.maze.vWalls[0][0]) isOpen = true;
-                        else if (dir.dz === 1 && !this.maze.hWalls[0][1]) isOpen = true;
-                        else if (dir.dz === -1 && !this.maze.hWalls[0][0]) isOpen = true;
+                        if (dir.dx === 1 && !this.maze.vWalls[this.start.x + 1][this.start.z]) isOpen = true;
+                        else if (dir.dx === -1 && !this.maze.vWalls[this.start.x][this.start.z]) isOpen = true;
+                        else if (dir.dz === 1 && !this.maze.hWalls[this.start.x][this.start.z + 1]) isOpen = true;
+                        else if (dir.dz === -1 && !this.maze.hWalls[this.start.x][this.start.z]) isOpen = true;
                     }
 
                     if (isOpen) {
