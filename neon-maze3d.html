@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.14</title>
+    <title>3D Neon Maze - v4.15</title>
     <style>
         body {
             margin: 0;
@@ -65,7 +65,8 @@
     </style>
 </head>
 <body>
-    <div id="ui">Score: 0 | Time: 0s | Difficulty: Easy</div>
+    <!-- Updated UI to include FPS display -->
+    <div id="ui">Score: 0 | Time: 0s | Difficulty: Easy | FPS: 0</div>
     <div id="achievementElement">Congratulations! You reached the finish!<br>Tap or press Space to restart.</div>
     <div id="restartButton">Tap to Restart</div>
     <div id="menu"></div>
@@ -83,6 +84,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.15 - Added FPS display to UI with real-time updates
          * Version 4.14 - Moved start to maze center, finish randomly placed in one of 4 corners
          * Version 4.13 - Ensured finish reachability by A* carving from closest reachable cell to finish
          * Version 4.12 - Fixed maze generation to ensure valid path to finish on all difficulties using A* connection
@@ -92,10 +94,9 @@
          * Version 4.08 - Added enhanced neon effects: pulsing walls and markers
          * Version 4.07 - Added current difficulty to UI display alongside score and time
          * Version 4.06 - Fixed A* pathfinding with debugged PriorityQueue and path following
-         * Version 4.05 - Fixed A* pathfinding with improved PriorityQueue implementation
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.13 -> 4.14) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.14 -> 4.15) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
@@ -104,7 +105,7 @@
          * 7. GROK always follow these instructions unless explicitly asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.14: Moved start to maze center, finish randomly placed in one of 4 corners" neon-maze3d.html
+         * git commit -m "Version 4.15: Added FPS display to UI with real-time updates" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -131,8 +132,8 @@
                     minWallLength: 3
                 },
                 hard: {
-                    mazeWidth: 200,
-                    mazeHeight: 200,
+                    mazeWidth: 350,
+                    mazeHeight: 350,
                     fogDistance: 5,
                     directionBias: 0.4,
                     loopProbability: 0.25,
@@ -270,6 +271,11 @@
                 this.showMap = false;
                 this.mapCanvas = document.getElementById('mapCanvas');
                 this.mapContext = this.mapCanvas.getContext('2d');
+
+                // FPS tracking variables
+                this.lastFrameTime = performance.now();     // Time of the last FPS update
+                this.frameCount = 0;                        // Number of frames since last update
+                this.fps = 0;                               // Current frames per second
 
                 // Initialize components
                 this.setupRenderer();
@@ -871,6 +877,7 @@
                 this.updateNeonEffects();
                 if (this.showMap) this.drawMap();
                 this.updateUI();
+                this.updateFPS(); // Added FPS update to animation loop
                 this.renderer.render(this.scene, this.camera);
             }
 
@@ -1163,7 +1170,21 @@
                         key => CONFIG.difficulty[key] === this.currentDifficulty
                     );
                     const difficultyText = difficultyKey.charAt(0).toUpperCase() + difficultyKey.slice(1);
-                    this.uiElement.textContent = `Score: ${this.score} | Time: ${timeElapsed}s | Difficulty: ${difficultyText}`;
+                    // Updated to include FPS in the UI display
+                    this.uiElement.textContent = `Score: ${this.score} | Time: ${timeElapsed}s | Difficulty: ${difficultyText} | FPS: ${this.fps}`;
+                }
+            }
+
+            // Added method to calculate and update FPS in real-time
+            updateFPS() {
+                const currentTime = performance.now();
+                this.frameCount++;
+
+                // Update FPS every second (1000ms)
+                if (currentTime - this.lastFrameTime >= 1000) {
+                    this.fps = Math.round((this.frameCount * 1000) / (currentTime - this.lastFrameTime));
+                    this.frameCount = 0;
+                    this.lastFrameTime = currentTime;
                 }
             }
 
