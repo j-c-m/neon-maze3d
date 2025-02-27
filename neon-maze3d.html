@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.16</title>
+    <title>3D Neon Maze - v4.17</title>
     <style>
         body {
             margin: 0;
@@ -83,6 +83,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.17 - Fixed camera spinning during pathfinding by improving waypoint progression and rotation clamping
          * Version 4.16 - Reworked pathSpeed and maxSpeed to cells/s (initially 4 cells/s) with delta-time normalization
          * Version 4.15 - Added FPS display to UI with real-time updates
          * Version 4.14 - Moved start to maze center, finish randomly placed in one of 4 corners
@@ -92,19 +93,18 @@
          * Version 4.10 - Added minimum wall lengths of 3, 4, 5 cells for Easy, Medium, Hard difficulties
          * Version 4.09 - Added 2D maze overview on 'm' key press with reachable areas shaded
          * Version 4.08 - Added enhanced neon effects: pulsing walls and markers
-         * Version 4.07 - Added current difficulty to UI display alongside score and time
          *
          * Instructions for Future Changes:
-         * 1. Increment the version number (e.g., 4.15 -> 4.16) in the <title> and changelog.
+         * 1. Increment the version number (e.g., 4.16 -> 4.17) in the <title> and changelog.
          * 2. Add a new entry to this changelog with the version and a brief description of changes.
          * 3. Include the last 10 most recent changes in the changelog.
          * 4. Generate a Git commit command prefixed with "Version X.XX:" followed by the description and include it below the changelog.
          * 5. Do not remove these instructions in future updates.
-         * 6. Do not remove comments in areas of the code you are not modifying.
+         * 6. Do not remove comments in any areas of the code, even if unmodified.
          * 7. GROK always follow these instructions unless explicitly asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.16: Reworked pathSpeed and maxSpeed to cells/s (initially 4 cells/s) with delta-time normalization" neon-maze3d.html
+         * git commit -m "Version 4.17: Fixed camera spinning during pathfinding by improving waypoint progression and rotation clamping" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -910,42 +910,53 @@
                 }
             }
 
-            // Follow the A* generated path, now frame-rate independent
+            // Follow the A* generated path, now frame-rate independent and fixed to prevent spinning
             followPath(deltaTime) {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
                 const targetGrid = this.path[this.pathIndex];
                 const targetX = targetGrid.x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
                 const targetZ = targetGrid.z * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
-                const direction = new THREE.Vector3(targetX - this.camera.position.x, 0, targetZ - this.camera.position.z).normalize();
+                const targetPosition = new THREE.Vector3(targetX, this.camera.position.y, targetZ);
+                const distanceToTarget = this.camera.position.distanceTo(targetPosition);
 
-                // Smoothly rotate towards target
+                // Smoothly rotate towards target with clamping to prevent spinning
+                const direction = targetPosition.clone().sub(this.camera.position).normalize();
                 const targetQuaternion = new THREE.Quaternion().setFromUnitVectors(
                     new THREE.Vector3(0, 0, -1),
                     direction
                 );
-                this.camera.quaternion.slerp(targetQuaternion, CONFIG.game.rotationLerpSpeed);
+                // Clamp rotation speed to avoid rapid spinning
+                const maxRotationStep = 0.1; // Maximum rotation change per frame
+                this.camera.quaternion.slerp(targetQuaternion, Math.min(CONFIG.game.rotationLerpSpeed * deltaTime * 60, maxRotationStep));
 
                 // Move towards target, speed in cells/s converted to units/s
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
                 const speedUnitsPerSecond = CONFIG.game.pathSpeed * CONFIG.game.cellSize; // 4 cells/s * 2 units/cell = 8 units/s
-                const moveStep = forward.multiplyScalar(speedUnitsPerSecond * deltaTime); // Distance = speed * time
-                let newPosition = this.camera.position.clone().add(moveStep);
+                const moveDistance = speedUnitsPerSecond * deltaTime; // Distance = speed * time
+                let newPosition = this.camera.position.clone();
 
-                // Collision check
-                this.raycaster.set(this.camera.position, forward);
-                const intersects = this.raycaster.intersectObjects(Array.from(this.walls.values()).map(w => w.mesh));
+                if (distanceToTarget > 0.05) { // Only move if not extremely close to target
+                    const forward = direction.clone();
+                    const moveStep = forward.multiplyScalar(Math.min(moveDistance, distanceToTarget));
+                    newPosition.add(moveStep);
 
-                if (intersects.length && intersects[0].distance <= moveStep.length() + CONFIG.game.safeDistance) {
-                    const hitPoint = intersects[0].point;
-                    const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
-                    newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(CONFIG.game.safeDistance));
+                    // Collision check
+                    this.raycaster.set(this.camera.position, forward);
+                    const intersects = this.raycaster.intersectObjects(Array.from(this.walls.values()).map(w => w.mesh));
+                    if (intersects.length && intersects[0].distance <= moveStep.length() + CONFIG.game.safeDistance) {
+                        const hitPoint = intersects[0].point;
+                        const normal = intersects[0].face.normal.clone().applyQuaternion(intersects[0].object.quaternion);
+                        newPosition = hitPoint.clone().sub(forward.clone().multiplyScalar(CONFIG.game.safeDistance));
+                    }
                 }
 
                 this.camera.position.copy(newPosition);
 
-                // Move to next path point if close enough
-                if (this.camera.position.distanceTo(new THREE.Vector3(targetX, this.camera.position.y, targetZ)) < 0.1) {
+                // Move to next path point if close enough, with tighter threshold to ensure progression
+                if (distanceToTarget < 0.2) { // Reduced from 0.1 to 0.2 for smoother transitions
                     this.pathIndex++;
+                    if (this.pathIndex >= this.path.length) {
+                        this.path = null; // End pathfinding when reaching the end
+                    }
                 }
             }
 
