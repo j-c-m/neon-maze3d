@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Neon Maze - v4.17</title>
+    <title>3D Neon Maze - v4.18</title>
     <style>
         body {
             margin: 0;
@@ -83,6 +83,7 @@
     <script type="module">
         /*
          * Changelog:
+         * Version 4.18 - Changed wall color of visited cells to a random neon color (different from initial wall/floor, consistent per game)
          * Version 4.17 - Fixed camera spinning during pathfinding by improving waypoint progression and rotation clamping
          * Version 4.16 - Reworked pathSpeed and maxSpeed to cells/s (initially 4 cells/s) with delta-time normalization
          * Version 4.15 - Added FPS display to UI with real-time updates
@@ -92,7 +93,6 @@
          * Version 4.11 - Changed min wall lengths to 2, 3, 3 for Easy, Medium, Hard; ensured finish reachable; removed unreachable walls
          * Version 4.10 - Added minimum wall lengths of 3, 4, 5 cells for Easy, Medium, Hard difficulties
          * Version 4.09 - Added 2D maze overview on 'm' key press with reachable areas shaded
-         * Version 4.08 - Added enhanced neon effects: pulsing walls and markers
          *
          * Instructions for Future Changes:
          * 1. Increment the version number (e.g., 4.16 -> 4.17) in the <title> and changelog.
@@ -104,7 +104,7 @@
          * 7. GROK always follow these instructions unless explicitly asked to ignore them.
          *
          * Git Commit Command for this change:
-         * git commit -m "Version 4.17: Fixed camera spinning during pathfinding by improving waypoint progression and rotation clamping" neon-maze3d.html
+         * git commit -m "Version 4.18: Changed wall color of visited cells to a random neon color (different from initial wall/floor, consistent per game)" neon-maze3d.html
          */
 
         import * as THREE from 'three';
@@ -242,6 +242,8 @@
                 this.path = null;                             // Current A* path (if active)
                 this.pathIndex = 0;                           // Current position in path
                 this.fogActive = true;                        // Fog enabled/disabled state
+                this.visitedCells = new Set();                // Track visited cells
+                this.visitedWallColor = null;                // Random color for visited walls
 
                 // Scene objects
                 this.wallMaterials = {};                      // Materials for walls and floor
@@ -655,17 +657,30 @@
             setupScene() {
                 this.scene.clear();
                 this.walls.clear();
+                this.visitedCells.clear();
 
-                // Randomly select neon colors
+                // Randomly select initial wall color
                 const wallColor = CONFIG.materials.neonColors[Math.floor(Math.random() * CONFIG.materials.neonColors.length)];
                 const availableFloorColors = CONFIG.materials.neonColors.filter(color => color !== wallColor);
                 const floorColor = availableFloorColors[Math.floor(Math.random() * availableFloorColors.length)];
 
+                // Select random visited wall color different from wall and floor
+                const availableVisitedColors = CONFIG.materials.neonColors.filter(color =>
+                    color !== wallColor && color !== floorColor);
+                this.visitedWallColor = availableVisitedColors[Math.floor(Math.random() * availableVisitedColors.length)];
+
                 // Create materials
                 this.wallMaterials = {
-                    wall: new THREE.MeshPhongMaterial({
+                    unvisited: new THREE.MeshPhongMaterial({
                         color: wallColor,
                         emissive: wallColor,
+                        emissiveIntensity: CONFIG.materials.wallEmissiveIntensity,
+                        shininess: CONFIG.materials.wallShininess,
+                        side: THREE.DoubleSide
+                    }),
+                    visited: new THREE.MeshPhongMaterial({
+                        color: this.visitedWallColor,
+                        emissive: this.visitedWallColor,
                         emissiveIntensity: CONFIG.materials.wallEmissiveIntensity,
                         shininess: CONFIG.materials.wallShininess,
                         side: THREE.DoubleSide
@@ -792,11 +807,13 @@
                 }
             }
 
-            // Update visible walls based on player position
+            // Update visible walls based on player position and visited status
             updateVisibleWalls() {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
                 const playerX = Math.floor((this.camera.position.x + mazeWidth * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize);
                 const playerZ = Math.floor((this.camera.position.z + mazeHeight * CONFIG.game.cellSize / 2) / CONFIG.game.cellSize);
+
+                this.visitedCells.add(`${playerX},${playerZ}`);
 
                 const minX = Math.max(0, playerX - CONFIG.game.visibilityRadius);
                 const maxX = Math.min(mazeWidth, playerX + CONFIG.game.visibilityRadius);
@@ -814,7 +831,11 @@
                             while (startZ + length < mazeHeight && this.maze.vWalls[x][startZ + length] && startZ + length < maxZ) length++;
                             const key = `v_${x}_${startZ}_${length}`;
                             newWalls.add(key);
-                            if (!this.walls.has(key)) this.addVerticalWall(x, startZ, length);
+                            if (!this.walls.has(key)) {
+                                this.addVerticalWall(x, startZ, length);
+                            } else {
+                                this.updateWallColor(key, x, startZ, length, true);
+                            }
                             z += length - 1;
                         }
                     }
@@ -829,7 +850,11 @@
                             while (startX + length < mazeWidth && this.maze.hWalls[startX + length][z] && startX + length < maxX) length++;
                             const key = `h_${startX}_${z}_${length}`;
                             newWalls.add(key);
-                            if (!this.walls.has(key)) this.addHorizontalWall(startX, z, length);
+                            if (!this.walls.has(key)) {
+                                this.addHorizontalWall(startX, z, length);
+                            } else {
+                                this.updateWallColor(key, startX, z, length, false);
+                            }
                             x += length - 1;
                         }
                     }
@@ -848,7 +873,8 @@
             addVerticalWall(x, z, length) {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
                 const geometry = new THREE.BoxGeometry(CONFIG.game.wallThickness, CONFIG.game.cellSize, CONFIG.game.cellSize * length);
-                const wall = new THREE.Mesh(geometry, this.wallMaterials.wall);
+                const material = this.isWallVisited(x, z, length, true) ? this.wallMaterials.visited : this.wallMaterials.unvisited;
+                const wall = new THREE.Mesh(geometry, material);
                 const posX = x * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2;
                 const posZ = (z + (length - 1) / 2) * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
                 wall.position.set(posX, 0, posZ);
@@ -860,12 +886,41 @@
             addHorizontalWall(x, z, length) {
                 const { mazeWidth, mazeHeight } = this.currentDifficulty;
                 const geometry = new THREE.BoxGeometry(CONFIG.game.cellSize * length, CONFIG.game.cellSize, CONFIG.game.wallThickness);
-                const wall = new THREE.Mesh(geometry, this.wallMaterials.wall);
+                const material = this.isWallVisited(x, z, length, false) ? this.wallMaterials.visited : this.wallMaterials.unvisited;
+                const wall = new THREE.Mesh(geometry, material);
                 const posX = (x + (length - 1) / 2) * CONFIG.game.cellSize - mazeWidth * CONFIG.game.cellSize / 2 + CONFIG.game.cellSize / 2;
                 const posZ = z * CONFIG.game.cellSize - mazeHeight * CONFIG.game.cellSize / 2;
                 wall.position.set(posX, 0, posZ);
                 this.scene.add(wall);
                 this.walls.set(`h_${x}_${z}_${length}`, { mesh: wall, x, z, length, isVertical: false });
+            }
+
+            // Check if a wall segment is adjacent to a visited cell
+            isWallVisited(x, z, length, isVertical) {
+                if (isVertical) {
+                    for (let i = 0; i < length; i++) {
+                        if (this.visitedCells.has(`${x-1},${z+i}`) || this.visitedCells.has(`${x},${z+i}`)) {
+                            return true;
+                        }
+                    }
+                } else {
+                    for (let i = 0; i < length; i++) {
+                        if (this.visitedCells.has(`${x+i},${z-1}`) || this.visitedCells.has(`${x+i},${z}`)) {
+                            return true;
+                        }
+                    }
+                }
+                return false;
+            }
+
+            // Update wall color based on visited status
+            updateWallColor(key, x, z, length, isVertical) {
+                const wall = this.walls.get(key);
+                if (this.isWallVisited(x, z, length, isVertical)) {
+                    wall.mesh.material = this.wallMaterials.visited;
+                } else {
+                    wall.mesh.material = this.wallMaterials.unvisited;
+                }
             }
 
             // Main animation loop
@@ -880,7 +935,7 @@
                 requestAnimationFrame(() => this.animate());
 
                 this.updateVisibleWalls();
-                this.updateMovement(deltaTime); // Pass deltaTime to movement update
+                this.updateMovement(deltaTime);
                 this.updateMarkers();
                 this.updateNeonEffects();
                 if (this.showMap) this.drawMap();
@@ -1050,7 +1105,9 @@
                 const time = performance.now() * CONFIG.materials.pulseSpeed;
 
                 // Pulsing walls
-                this.wallMaterials.wall.emissiveIntensity = CONFIG.materials.wallEmissiveIntensity +
+                this.wallMaterials.unvisited.emissiveIntensity = CONFIG.materials.wallEmissiveIntensity +
+                    Math.sin(time) * CONFIG.materials.pulseAmplitude;
+                this.wallMaterials.visited.emissiveIntensity = CONFIG.materials.wallEmissiveIntensity +
                     Math.sin(time) * CONFIG.materials.pulseAmplitude;
 
                 // Pulsing start marker
@@ -1149,6 +1206,7 @@
                 this.velocity.set(0, 0, 0);
                 this.path = null;
                 this.input = { forward: false, backward: false, left: false, right: false };
+                this.visitedCells.clear();
                 this.generateMaze();
                 this.setupScene();
                 this.animate();
@@ -1173,6 +1231,8 @@
                 this.start = { x: 0, z: 0 };
                 this.pathMarkers.forEach(marker => this.scene.remove(marker));
                 this.pathMarkers = [];
+                this.visitedCells.clear();
+                this.visitedWallColor = null;
                 this.showMenu();
                 this.achievementElement.style.display = 'none';
                 this.restartButton.style.display = 'none';
